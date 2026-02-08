@@ -1,0 +1,14 @@
+[    1732ms] [WARNING]   WARN  [Statsig] Creating multiple Statsig clients with the same SDK key can lead to unexpected behavior. Multi-instance support requires different SDK keys. @ https://shorthaired-billboard-f9a.notion.site/_assets/65948-bf1a33ee43100a65.js:0
+[    3008ms] [WARNING] Ignoring inability to install OPFS sqlite3_vfs: Cannot install OPFS: Missing SharedArrayBuffer and/or Atomics. The server must emit the COOP/COEP response headers to enable those. See https://sqlite.org/wasm/doc/trunk/persistence.md#coop-coep @ https://shorthaired-billboard-f9a.notion.site/_assets/wasm-sqlite-worker-5cdd36e5fdcb4355.js:0
+[    3259ms] [ERROR] Failed to load resource: the server responded with a status of 401 () @ https://shorthaired-billboard-f9a.notion.site/api/v3/getBillingData:0
+[    3259ms] [ERROR] HttpRequestError: Received HTTP 401
+    at https://shorthaired-billboard-f9a.notion.site/_assets/ClientFramework-69b6cb36d2ea6cb1.js:1:66262
+    at async g (https://shorthaired-billboard-f9a.notion.site/_assets/ClientFramework-69b6cb36d2ea6cb1.js:1:65851)
+    at async Object.de [as callApi] (https://shorthaired-billboard-f9a.notion.site/_assets/13369-1acd34c0e1151777.js:183:316674)
+    at async Object.ae [as callCellCompatibleApi] (https://shorthaired-billboard-f9a.notion.site/_assets/13369-1acd34c0e1151777.js:183:315333)
+    at async getValue (https://shorthaired-billboard-f9a.notion.site/_assets/13369-1acd34c0e1151777.js:189:228188)
+    at async s (https://shorthaired-billboard-f9a.notion.site/_assets/ClientFramework-69b6cb36d2ea6cb1.js:1:13865)
+    at async https://shorthaired-billboard-f9a.notion.site/_assets/13369-1acd34c0e1151777.js:189:227976
+    at async i.fetchFn (https://shorthaired-billboard-f9a.notion.site/_assets/13369-1acd34c0e1151777.js:183:236729)
+    at async i.fetch (https://shorthaired-billboard-f9a.notion.site/_assets/ClientFramework-69b6cb36d2ea6cb1.js:1:12163) @ https://shorthaired-billboard-f9a.notion.site/_assets/13369-1acd34c0e1151777.js:182
+[    3305ms] [WARNING] Amplitude Logger [Warn]: Event not tracked, no destination plugins on the instance @ https://shorthaired-billboard-f9a.notion.site/_assets/transport-support-79187dfcba564918.js:0
