@@ -1,0 +1,14 @@
+{
+	"name": "@worldcoin/agentkit",
+	"version": "0.0.1",
+	"type": "module",
+	"main": "src/index.ts",
+	"dependencies": {
+		"@scure/base": "^1.2.6",
+		"@x402/core": "^2.4.0",
+		"siwe": "^2.3.2",
+		"tweetnacl": "^1.0.3",
+		"viem": "^2.46.2",
+		"zod": "^3.24.2"
+	}
+}

@@ -1,0 +1,9 @@
+[profile.default]
+src = "src"
+out = "out"
+libs = ["lib", "dependencies"]
+
+[dependencies]
+solady = { version = "0.0.210" }
+forge-std = { version = "1.8.2" }
+"@openzeppelin-contracts" = { version = "5.0.2" }

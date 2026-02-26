@@ -1,0 +1,27 @@
+{
+	"name": "x402-agentkit-poc",
+	"private": true,
+	"workspaces": [
+		"agentkit"
+	],
+	"devDependencies": {
+		"@typescript-eslint/parser": "^8.56.1",
+		"prettier": "^3.8.1",
+		"prettier-plugin-sort-imports-desc": "^1.0.0",
+		"typescript": "^5.8.3"
+	},
+	"prettier": {
+		"parser": "@typescript-eslint/parser",
+		"semi": false,
+		"tabWidth": 4,
+		"useTabs": true,
+		"printWidth": 120,
+		"singleQuote": true,
+		"trailingComma": "es5",
+		"arrowParens": "avoid",
+		"bracketSpacing": true,
+		"plugins": [
+			"prettier-plugin-sort-imports-desc"
+		]
+	}
+}
