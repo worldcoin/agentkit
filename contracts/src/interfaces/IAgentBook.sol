@@ -15,4 +15,9 @@ interface IAgentBook {
     /// @param agent The agent's wallet address
     /// @return humanId The anonymous human identifier (nullifier hash), or 0 if not registered
     function lookupHuman(address agent) external view returns (uint256 humanId);
+
+    /// @notice Get the next expected nonce for an agent address.
+    /// @param agent The agent's wallet address
+    /// @return nonce The next nonce that must be used when registering this agent
+    function getNextNonce(address agent) external view returns (uint256 nonce);
 }

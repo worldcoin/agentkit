@@ -63,6 +63,27 @@ contract AgentBookTest is Test {
         assertEq(agentBook.lookupHuman(agent1), 0);
     }
 
+    function testCannotRegisterWithInvalidNonce() public {
+        worldId.prank();
+
+        vm.expectRevert(AgentBook.InvalidNonce.selector);
+        agentBook.register(agent1, 0, 1, 0x1234, fakeProof);
+
+        assertEq(agentBook.lookupHuman(agent1), 0);
+    }
+
+    function testNonceIncrements() public {
+        assertEq(agentBook.getNextNonce(agent1), 0);
+
+        worldId.prank();
+        agentBook.register(agent1, 0, 0, 0x1234, fakeProof);
+        assertEq(agentBook.getNextNonce(agent1), 1);
+
+        worldId.prank();
+        agentBook.register(agent1, 0, 1, 0x5678, fakeProof);
+        assertEq(agentBook.getNextNonce(agent1), 2);
+    }
+
     function testCanReRegisterAgent() public {
         worldId.prank();
         agentBook.register(agent1, 0, 0, 0x1234, fakeProof);
@@ -70,7 +91,7 @@ contract AgentBookTest is Test {
 
         // re-register same agent with a different nullifier
         worldId.prank();
-        agentBook.register(agent1, 0, 0, 0x5678, fakeProof);
+        agentBook.register(agent1, 0, 1, 0x5678, fakeProof);
         assertEq(agentBook.lookupHuman(agent1), 0x5678);
     }
 

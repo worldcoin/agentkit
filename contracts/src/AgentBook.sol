@@ -23,6 +23,9 @@ contract AgentBook is IAgentBook, Ownable2Step {
     /// @notice Thrown when the owner attempts to resign ownership.
     error CannotRenounceOwnership();
 
+    /// @notice Thrown when the provided nonce doesn't match the expected nonce.
+    error InvalidNonce();
+
     ///////////////////////////////////////////////////////////////////////////////
     ///                                  EVENTS                                ///
     //////////////////////////////////////////////////////////////////////////////
@@ -62,6 +65,9 @@ contract AgentBook is IAgentBook, Ownable2Step {
     /// @notice Look up the anonymous human identifier for a registered agent.
     mapping(address => uint256) public lookupHuman;
 
+    /// @notice The next expected nonce for a given agent address.
+    mapping(address => uint256) public getNextNonce;
+
     ///////////////////////////////////////////////////////////////////////////////
     ///                               CONSTRUCTOR                              ///
     //////////////////////////////////////////////////////////////////////////////
@@ -91,6 +97,9 @@ contract AgentBook is IAgentBook, Ownable2Step {
         external
         override
     {
+        if (nonce != getNextNonce[agent]) revert InvalidNonce();
+
+        getNextNonce[agent] = nonce + 1;
         lookupHuman[agent] = nullifierHash;
 
         worldIdRouter.verifyProof(
