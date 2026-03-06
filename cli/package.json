@@ -1,6 +1,6 @@
 {
   "name": "@worldcoin/agentkit-cli",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "Register agent wallets with World ID-verified humans via AgentBook.",
   "type": "module",
   "main": "dist/index.js",
@@ -16,6 +16,8 @@
   },
   "scripts": {
     "build": "tsc",
+    "prepublishOnly": "bun run build",
+    "publish:npm": "npm publish",
     "cli": "tsx src/index.ts"
   },
   "dependencies": {
