@@ -3,7 +3,8 @@ import { createPublicClient, extractChain, http, toHex, type PublicClient } from
 
 /** Known AgentBook deployments keyed by CAIP-2 network identifier. */
 const KNOWN_DEPLOYMENTS: Record<string, `0x${string}`> = {
-	// TODO: Deploy contract on Base
+	'eip155:8453': '0xE1D1D3526A6FAa37eb36bD10B933C1b77f4561a4',
+	'eip155:84532': '0xA23aB2712eA7BBa896930544C7d6636a96b944dA',
 }
 
 const AGENT_BOOK_ABI = [
