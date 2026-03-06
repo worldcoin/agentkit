@@ -6,6 +6,10 @@
 		"prettier-plugin-sort-imports-desc": "^1.0.0",
 		"typescript": "^5.8.3"
 	},
+	"scripts": {
+		"build:agentkit": "bun run --cwd agentkit build",
+		"publish:agentkit": "npm publish --workspace @worldcoin/agentkit"
+	},
 	"prettier": {
 		"parser": "@typescript-eslint/parser",
 		"semi": false,

@@ -2,6 +2,34 @@
 
 Verify that an agent is backed by a real, World ID-verified human.
 
+## Install
+
+Install the library from npm:
+
+```bash
+npm install @worldcoin/agentkit
+```
+
+or:
+
+```bash
+bun add @worldcoin/agentkit
+```
+
+If you also need the registration CLI, install:
+
+```bash
+npm install -g @worldcoin/agentkit-cli
+```
+
+or run it with:
+
+```bash
+npx @worldcoin/agentkit-cli register <agent-address>
+```
+
+For the end-user registration flow, see [`../cli/REGISTRATION.md`](../cli/REGISTRATION.md).
+
 ## Overview
 
 Services that deal with automated traffic increasingly need to distinguish between "random bot" and "bot acting on behalf of a human". AgentKit solves this by combining the wallet every x402 agent already has with World ID's proof-of-personhood and an on-chain agent registry (the AgentBook).
@@ -34,6 +62,8 @@ Usage counters are tracked per **human** per **endpoint** — so two agents back
 5. If the agent is registered and the access mode allows it, access is granted or a discount is applied. Otherwise, the standard payment flow continues.
 
 ## Server Usage
+
+AgentKit is published as `@worldcoin/agentkit` and is intended to be consumed as a normal npm package in your server application.
 
 ### Hooks (Recommended)
 
@@ -169,7 +199,7 @@ const hooks = createAgentkitHooks({
 
 ### Custom AgentBook Configuration
 
-`createAgentBookVerifier()` has a built-in mapping of known AgentBook deployments (currently Base Sepolia). The contract address and RPC endpoint are resolved automatically from the agent's `chainId`. You can override the contract address and/or RPC for custom deployments:
+`createAgentBookVerifier()` has a built-in mapping of known AgentBook deployments. The contract address and RPC endpoint are resolved automatically from the agent's `chainId`. You can override the contract address and/or RPC for custom deployments:
 
 ```typescript
 // Uses known deployments — no config needed for supported chains
