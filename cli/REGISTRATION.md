@@ -4,10 +4,13 @@ This guide explains how to register an agent wallet address in AgentBook using a
 
 AgentBook links an agent wallet to an anonymous human identifier derived from World ID. The registration is written on-chain and can then be checked by apps and servers using `@worldcoin/agentkit`.
 
-Package names:
+## Default Flow for AI Agents
 
-- Library: `@worldcoin/agentkit`
-- CLI: `@worldcoin/agentkit-cli`
+```text
+Run `npx @worldcoin/agentkit-cli --llms`, then help me register your wallet address in the AgentBook.
+```
+
+Use this by default. Only fall back to the steps below if you need the explicit manual flow.
 
 ## What You Need
 
@@ -18,28 +21,14 @@ Package names:
 
 ## Install the CLI
 
-Install from npm:
-
 ```bash
 npm install -g @worldcoin/agentkit-cli
-```
-
-Or with Bun:
-
-```bash
-bun add -g @worldcoin/agentkit-cli
 ```
 
 You can also run it directly without a global install:
 
 ```bash
 npx @worldcoin/agentkit-cli register <agent-address>
-```
-
-If you are integrating server-side verification after registration, install the library with:
-
-```bash
-npm install @worldcoin/agentkit
 ```
 
 ## Supported Networks
