@@ -1,9 +1,5 @@
 {
 	"name": "x402-agentkit-poc",
-	"private": true,
-	"workspaces": [
-		"agentkit"
-	],
 	"devDependencies": {
 		"@typescript-eslint/parser": "^8.56.1",
 		"prettier": "^3.8.1",
@@ -23,5 +19,9 @@
 		"plugins": [
 			"prettier-plugin-sort-imports-desc"
 		]
-	}
+	},
+	"private": true,
+	"workspaces": [
+		"agentkit"
+	]
 }
