@@ -17,8 +17,13 @@
 		}
 	},
 	"files": ["dist"],
+	"publishConfig": {
+		"access": "public"
+	},
 	"scripts": {
-		"build": "tsup"
+		"build": "tsup",
+		"prepublishOnly": "bun run build",
+		"publish:npm": "npm publish"
 	},
 	"dependencies": {
 		"@scure/base": "^1.2.6",
