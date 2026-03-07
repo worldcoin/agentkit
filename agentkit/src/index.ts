@@ -42,7 +42,12 @@ export {
 } from './solana'
 
 // AgentBook
-export { createAgentBookVerifier, type AgentBookVerifier, type AgentBookOptions } from './agent-book'
+export {
+	createAgentBookVerifier,
+	type AgentBookVerifier,
+	type AgentBookOptions,
+	type AgentBookNetwork,
+} from './agent-book'
 
 // Storage
 export { InMemoryAgentKitStorage, type AgentKitStorage } from './storage'

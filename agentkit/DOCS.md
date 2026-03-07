@@ -137,7 +137,7 @@ app.get('/data', c => {
 serve({ fetch: app.fetch, port: 4021 })
 ```
 
-If your paid route runs on World Chain (`eip155:480`), add a custom `registerMoneyParser(...)` for World Chain USDC on `ExactEvmScheme`. If AgentBook registration and lookup should stay on Base mainnet, pin `createAgentBookVerifier(...)` to Base explicitly instead of relying on the request chain.
+If your paid route runs on World Chain (`eip155:480`), add a custom `registerMoneyParser(...)` for World Chain USDC on `ExactEvmScheme`. AgentBook lookup only uses the built-in Base mainnet and Base Sepolia deployments: Base Sepolia requests use Base Sepolia, and all other built-in lookups default to Base mainnet.
 
 ### Mode Examples
 
@@ -201,11 +201,16 @@ const hooks = createAgentkitHooks({
 
 ### Custom AgentBook Configuration
 
-`createAgentBookVerifier()` has a built-in mapping of known AgentBook deployments. Today that mapping covers Base mainnet and Base Sepolia. By default it resolves the contract address and RPC endpoint from the agent's `chainId`. If your payment route runs on World Chain but AgentBook remains on Base, pass Base configuration explicitly:
+`createAgentBookVerifier()` has a built-in mapping of known AgentBook deployments. Today that mapping covers Base mainnet and Base Sepolia only. By default, Base Sepolia requests use the Base Sepolia deployment and all other built-in lookups use Base mainnet. Use `network` to pin lookup explicitly, or pass a custom client/address for a custom deployment:
 
 ```typescript
 // Uses known deployments — no config needed for supported chains
 const agentBook = createAgentBookVerifier()
+
+// Force Base Sepolia even if the request is signed on another chain
+const agentBook = createAgentBookVerifier({
+	network: 'base-sepolia',
+})
 
 // Custom deployment (e.g., local Anvil)
 const agentBook = createAgentBookVerifier({
@@ -221,14 +226,8 @@ const agentBook = createAgentBookVerifier({
 	client: createPublicClient({ chain: base, transport: http() }),
 })
 
-// World Chain payments + Base AgentBook lookup
-const agentBook = createAgentBookVerifier({
-	contractAddress: '0xE1D1D3526A6FAa37eb36bD10B933C1b77f4561a4',
-	client: createPublicClient({
-		chain: base,
-		transport: http('https://mainnet.base.org'),
-	}),
-})
+// World Chain payments + Base AgentBook lookup (default built-in behavior)
+const agentBook = createAgentBookVerifier()
 ```
 
 ### Manual Usage (Advanced)
@@ -373,15 +372,16 @@ Creates hooks for `x402HTTPResourceServer` and optionally `x402ResourceServer`.
 
 ### `createAgentBookVerifier(options?)`
 
-Creates a verifier that looks up agent wallet addresses in the AgentBook contract. Contract addresses are resolved from a built-in network→address mapping using the agent's `chainId`, unless overridden. Throws if no deployment is known for the given chain and no custom address is configured.
+Creates a verifier that looks up agent wallet addresses in the AgentBook contract. Built-in lookup only targets the Base mainnet and Base Sepolia AgentBook deployments. Base Sepolia requests use Base Sepolia; all other built-in lookups use Base mainnet. Custom clients and custom contract addresses still override this behavior.
 
 | Option            | Type                | Description                                                                            |
 | ----------------- | ------------------- | -------------------------------------------------------------------------------------- |
+| `network`         | `"base" \| "base-sepolia"` | Pin built-in lookup to Base mainnet or Base Sepolia.                             |
 | `client`          | `PublicClient`      | Custom viem public client. Overrides automatic client creation.                        |
 | `contractAddress` | `` `0x${string}` `` | Custom contract address. Overrides the built-in network→address mapping.               |
 | `rpcUrl`          | `string`            | Custom RPC URL. Used when creating clients automatically (ignored if `client` is set). |
 
-Returns an object with `lookupHuman(address: string, chainId: string): Promise<string | null>`. The `chainId` is a CAIP-2 identifier (e.g., `"eip155:84532"`) used to resolve the contract address and RPC endpoint. Returns the anonymous human identifier (hex string) or `null` if the agent is not registered.
+Returns an object with `lookupHuman(address: string, chainId: string): Promise<string | null>`. The `chainId` is a CAIP-2 identifier (for example, `"eip155:480"` or `"eip155:84532"`). It is used to choose between Base mainnet and Base Sepolia for built-in lookup unless `network`, `client`, or `contractAddress` overrides that behavior. Returns the anonymous human identifier (hex string) or `null` if the agent is not registered.
 
 ### `AgentKitStorage` / `InMemoryAgentKitStorage`
 

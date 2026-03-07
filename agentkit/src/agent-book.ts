@@ -7,6 +7,11 @@ const KNOWN_DEPLOYMENTS: Record<string, `0x${string}`> = {
 	'eip155:84532': '0xA23aB2712eA7BBa896930544C7d6636a96b944dA',
 }
 
+const BASE_MAINNET = 'eip155:8453'
+const BASE_SEPOLIA = 'eip155:84532'
+
+export type AgentBookNetwork = 'base' | 'base-sepolia'
+
 const AGENT_BOOK_ABI = [
 	{
 		inputs: [{ internalType: 'address', name: '', type: 'address' }],
@@ -24,18 +29,38 @@ export interface AgentBookOptions {
 	contractAddress?: `0x${string}`
 	/** Custom RPC URL. Defaults to the chain's default RPC. */
 	rpcUrl?: string
+	/** Pin lookup to the built-in Base or Base Sepolia AgentBook deployment. */
+	network?: AgentBookNetwork
 }
 
 export function createAgentBookVerifier(options: AgentBookOptions = {}) {
 	const clientCache = new Map<string, PublicClient>()
 
+	function resolveLookupChainId(chainId: string): string {
+		if (options.network === 'base') return BASE_MAINNET
+		if (options.network === 'base-sepolia') return BASE_SEPOLIA
+
+		if (chainId === BASE_MAINNET || chainId === BASE_SEPOLIA) {
+			return chainId
+		}
+
+		// AgentBook is only deployed on Base mainnet and Base Sepolia.
+		// Default non-Base chains to Base mainnet unless explicitly pinned.
+		return BASE_MAINNET
+	}
+
 	function getClient(chainId: string): PublicClient {
 		if (options.client) return options.client
 
-		let cached = clientCache.get(chainId)
+		const lookupChainId = resolveLookupChainId(chainId)
+
+		let cached = clientCache.get(lookupChainId)
 		if (cached) return cached
 
-		const numericId = extractNumericChainId(chainId)
+		const numericId =
+			options.contractAddress && options.rpcUrl && !options.network
+				? extractNumericChainId(chainId)
+				: extractNumericChainId(lookupChainId)
 
 		let chain
 		if (options.rpcUrl) {
@@ -49,17 +74,18 @@ export function createAgentBookVerifier(options: AgentBookOptions = {}) {
 			chain,
 			transport: http(options.rpcUrl),
 		}) as PublicClient
-		clientCache.set(chainId, cached)
+		clientCache.set(lookupChainId, cached)
 		return cached
 	}
 
 	function getContractAddress(chainId: string): `0x${string}` {
 		if (options.contractAddress) return options.contractAddress
 
-		const address = KNOWN_DEPLOYMENTS[chainId]
+		const lookupChainId = resolveLookupChainId(chainId)
+		const address = KNOWN_DEPLOYMENTS[lookupChainId]
 		if (!address) {
 			throw new Error(
-				`No AgentBook deployment known for network ${chainId}. ` +
+				`No AgentBook deployment known for network ${lookupChainId}. ` +
 					`Pass a contractAddress to createAgentBookVerifier().`
 			)
 		}
@@ -70,8 +96,8 @@ export function createAgentBookVerifier(options: AgentBookOptions = {}) {
 		/**
 		 * Look up the anonymous human identifier for an agent's wallet address.
 		 * @param address The agent's wallet address.
-		 * @param chainId CAIP-2 chain identifier (e.g. "eip155:84532") used to
-		 *   resolve the AgentBook contract address and RPC endpoint.
+		 * @param chainId CAIP-2 chain identifier (e.g. "eip155:480"). Built-in
+		 *   lookup resolves to Base mainnet or Base Sepolia only.
 		 * @returns The human ID (hex string) if registered, or null.
 		 */
 		async lookupHuman(address: string, chainId: string): Promise<string | null> {
