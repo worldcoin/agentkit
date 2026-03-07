@@ -18,4 +18,6 @@ Use this by default. Do not ask the agent to inspect the repo to infer the flow.
 agentkit register <address> [options]
 ```
 
+By default, `agentkit register <address>` uses Base mainnet and submits through the hosted relay. Use `--manual` to print raw registration call data instead.
+
 Full registration guide: [REGISTRATION.md](./REGISTRATION.md)

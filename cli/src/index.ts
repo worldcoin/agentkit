@@ -30,6 +30,9 @@ const AGENT_BOOK_ABI = [
 
 const APP_ID = 'app_a7c3e2b6b83927251a0db5345bd7146a'
 const ACTION = 'agentbook-registration'
+const DEFAULT_AUTO_API_URLS: Partial<Record<keyof typeof NETWORKS, string>> = {
+	base: 'https://x402-worldchain.vercel.app',
+}
 
 // ─── CLI ─────────────────────────────────────────────────────────────────────
 
@@ -45,11 +48,15 @@ cli.command('register', {
 	}),
 	options: z.object({
 		network: z.enum(NETWORK_NAMES).default('base').describe('Target network'),
-		auto: z.boolean().optional().describe('Submit registration to API instead of printing call data'),
+		auto: z.boolean().default(true).describe('Submit registration to the default relay or API_URL override'),
+		manual: z.boolean().optional().describe('Print manual call data instead of submitting through a relay'),
 	}),
-	alias: { network: 'n', auto: 'a' },
+	alias: { network: 'n', auto: 'a', manual: 'm' },
 	env: z.object({
-		API_URL: z.string().optional().describe('API endpoint for submitting registrations'),
+		API_URL: z
+			.string()
+			.optional()
+			.describe('Override API base URL for registration relay; base mainnet defaults to https://x402-worldchain.vercel.app'),
 	}),
 	output: z.object({
 		agent: z.string(),
@@ -72,6 +79,7 @@ cli.command('register', {
 	async run(c) {
 		const agentAddress = c.args.address as `0x${string}`
 		const deployment = NETWORKS[c.options.network]
+		const shouldAuto = c.options.manual ? false : c.options.auto
 
 		// 1. Read next nonce from AgentBook contract
 		if (!c.agent) console.log(`Looking up next nonce for ${agentAddress}...`)
@@ -142,7 +150,7 @@ cli.command('register', {
 			network: c.options.network,
 		}
 
-		if (!c.options.auto) {
+		if (!shouldAuto) {
 			if (!c.agent) {
 				console.log()
 				console.log('Submit this transaction on-chain:')
@@ -156,13 +164,22 @@ cli.command('register', {
 			return registration
 		}
 
-		if (!c.env.API_URL) {
-			return c.error({ code: 'MISSING_API_URL', message: 'API_URL environment variable is required with --auto' })
+		const apiUrl = c.env.API_URL ?? DEFAULT_AUTO_API_URLS[c.options.network]
+		if (!apiUrl) {
+			return c.error({
+				code: 'MISSING_API_URL',
+				message: `No default registration relay is configured for network ${c.options.network}. Set API_URL to use --auto on this network.`,
+			})
 		}
 
-		if (!c.agent) console.log(`\nRegistering agent ${agentAddress}...`)
+		const registerUrl = `${apiUrl.replace(/\/$/, '')}/register`
 
-		const response = await fetch(`${c.env.API_URL}/register`, {
+		if (!c.agent) {
+			console.log(`\nRegistering agent ${agentAddress}...`)
+			console.log(`Relay: ${apiUrl}`)
+		}
+
+		const response = await fetch(registerUrl, {
 			method: 'POST',
 			headers: { 'Content-Type': 'application/json' },
 			body: JSON.stringify(registration),

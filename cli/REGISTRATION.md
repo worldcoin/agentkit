@@ -49,20 +49,20 @@ When you run the CLI:
 2. It creates a World ID verification request for the tuple `(agent address, nonce)`.
 3. It shows a QR code and deep link for World App.
 4. After verification completes, it returns the proof payload needed for `register(...)`.
-5. You either submit the transaction yourself or let your backend submit it with `--auto`.
+5. By default on Base mainnet, the CLI submits through the hosted relay. If you want raw call data instead, use `--manual`.
 
 ## Option 1: Manual Registration
 
-Use this when you want the CLI to produce the registration payload and contract call inputs, but you will send the transaction yourself.
+Use this when you want the CLI to produce the registration payload and contract call inputs, but you will send the transaction yourself instead of using the default relay.
 
 ```bash
-agentkit register 0x1234567890abcdef1234567890abcdef12345678
+agentkit register 0x1234567890abcdef1234567890abcdef12345678 --manual
 ```
 
 For Base Sepolia:
 
 ```bash
-agentkit register 0x1234567890abcdef1234567890abcdef12345678 --network base-sepolia
+agentkit register 0x1234567890abcdef1234567890abcdef12345678 --network base-sepolia --manual
 ```
 
 After the World ID check succeeds, the CLI returns:
@@ -83,12 +83,25 @@ register(address agent, uint256 root, uint256 nonce, uint256 nullifierHash, uint
 
 ## Option 2: Automatic Registration via API
 
-Use this when you have a backend that accepts the registration payload and submits the transaction.
+Use this when you want a backend to accept the registration payload and submit the transaction on the agent's behalf.
+This is the path to make registration gasless for the end user: the backend pays the Base gas, not the agent.
 
-Set `API_URL` and run:
+For Base mainnet, automatic registration uses the shared hosted relay by default:
 
 ```bash
-API_URL=https://your-api.example.com agentkit register 0x1234567890abcdef1234567890abcdef12345678 --auto
+agentkit register 0x1234567890abcdef1234567890abcdef12345678
+```
+
+You can also be explicit:
+
+```bash
+agentkit register 0x1234567890abcdef1234567890abcdef12345678 --network base --auto
+```
+
+Or override the relay and use your own compatible service:
+
+```bash
+API_URL=https://your-api.example.com agentkit register 0x1234567890abcdef1234567890abcdef12345678 --network base --auto
 ```
 
 The CLI will `POST` the registration payload to:
@@ -97,6 +110,19 @@ The CLI will `POST` the registration payload to:
 POST {API_URL}/register
 Content-Type: application/json
 ```
+
+The shared hosted relay base URL is:
+
+```text
+https://x402-worldchain.vercel.app
+```
+
+Note:
+
+- `API_URL` is the service base URL, not the facilitator URL path
+- if you use the shared hosted service, use `https://x402-worldchain.vercel.app`, not `https://x402-worldchain.vercel.app/facilitator`
+- the relay endpoint is only for sponsoring `AgentBook.register(...)` on Base
+- it is separate from the x402 facilitator endpoints
 
 Example request body:
 
@@ -120,6 +146,32 @@ On success, the API can return a transaction hash:
 }
 ```
 
+Relay implementations should:
+
+- check on-chain first and refuse to spend gas if the agent is already registered
+- refuse to sponsor when gas is above their configured cap
+- return the manual registration payload when sponsorship is refused so the agent can self-send or retry later
+
+### Minimal Relayer Example
+
+This repo includes a minimal relayer at [`./examples/register-relayer.mjs`](./examples/register-relayer.mjs).
+It accepts `POST /register`, simulates the Base transaction, and if valid submits it with a server-funded key.
+
+Run it with:
+
+```bash
+cd cli
+RELAYER_PRIVATE_KEY=0xyourfundedserverkey node examples/register-relayer.mjs
+```
+
+Then agents can register without holding Base ETH:
+
+```bash
+API_URL=http://localhost:3000 agentkit register 0x1234567890abcdef1234567890abcdef12345678 --network base --auto
+```
+
+Protect this endpoint before using it in production. At minimum, add rate limiting, origin checks, and whatever authentication or allowlisting matches your app.
+
 ## Example User Experience
 
 ```bash
@@ -131,14 +183,16 @@ The CLI will:
 - look up the next nonce
 - print a World App QR code
 - wait for verification
-- output the registration payload
+- submit the registration through the hosted Base relay
 
 ## Notes
 
 - The agent address must be a valid EVM address.
 - Registration is nonce-based. Re-registering the same agent requires the next nonce from the contract.
 - The World ID proof is bound to both the agent address and the current nonce, so you cannot reuse an old proof for a later registration.
-- `--auto` requires `API_URL`.
+- `register <address>` defaults to `base` and automatic relay submission.
+- Use `--manual` to print call data instead of submitting through the relay.
+- Set `API_URL` to override the relay or to use `--auto` on networks without a default relay.
 
 ## Troubleshooting
 
@@ -150,12 +204,12 @@ Make sure the agent address is a 20-byte hex EVM address such as `0x1234...`.
 
 Retry the command and complete the World App step within the session window.
 
-### `API_URL environment variable is required with --auto`
+### No default relay is configured for this network
 
-Set the environment variable before running the command:
+Base mainnet has a default hosted relay. Other networks require an explicit override:
 
 ```bash
-API_URL=https://your-api.example.com agentkit register 0x1234567890abcdef1234567890abcdef12345678 --auto
+API_URL=https://your-api.example.com agentkit register 0x1234567890abcdef1234567890abcdef12345678 --network base-sepolia --auto
 ```
 
 ### Transaction reverted

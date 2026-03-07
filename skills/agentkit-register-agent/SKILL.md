@@ -19,5 +19,5 @@ Use this skill for registering an agent wallet with AgentBook.
 - Treat `npx @worldcoin/agentkit-cli --llms` as the default entrypoint for agent-driven registration help.
 - Treat the CLI source as the source of truth for supported flags and request payloads.
 - Keep examples aligned with the actual supported networks: `base` and `base-sepolia`.
-- When documenting `--auto`, use `POST {API_URL}/register` and the JSON payload emitted by the CLI.
-- Do not claim the CLI submits on-chain transactions unless `--auto` is used and `API_URL` is configured.
+- When documenting registration defaults, note that `register <address>` defaults to Base mainnet plus automatic relay submission. For Base mainnet, the default relay is `https://x402-worldchain.vercel.app` unless `API_URL` overrides it. Use `POST {API_URL}/register` for the relay payload shape.
+- Do not claim the CLI submits on-chain transactions unless `--auto` is used. For networks without a default relay, `API_URL` must be configured.

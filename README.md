@@ -7,6 +7,8 @@ Agent Kit is an x402 extension for websites and APIs that want to recognize huma
 - `@worldcoin/agentkit-cli` for registering an agent wallet in AgentBook with a World ID proof
 - `@worldcoin/agentkit` for integrating AgentBook-backed verification into x402 server flows
 
+Registration does not have to require the agent to hold gas. `agentkit register <address>` now defaults to Base mainnet plus the shared hosted relay at `https://x402-worldchain.vercel.app`, and `API_URL` can override it.
+
 ## Default Registration Flow
 
 Start with this prompt:
