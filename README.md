@@ -9,6 +9,8 @@ Agent Kit is an x402 extension for websites and APIs that want to recognize huma
 
 Registration does not have to require the agent to hold gas. `agentkit register <address>` now defaults to Base mainnet plus the shared hosted relay at `https://x402-worldchain.vercel.app`, and `API_URL` can override it.
 
+For the common production setup, keep payments on World Chain and keep AgentBook lookup on Base mainnet.
+
 ## Default Registration Flow
 
 Start with this prompt:
@@ -30,4 +32,4 @@ This lets applications distinguish between arbitrary automation and automation a
 ## Docs
 
 - Registration: [`./cli/REGISTRATION.md`](./cli/REGISTRATION.md)
-- Server integration: [`./agentkit/DOCS.md`](./agentkit/DOCS.md)
+- Server integration: [`./agentkit/DOCS.md`](./agentkit/DOCS.md) for the end-to-end x402 flow, including World Chain payments plus Base AgentBook lookup

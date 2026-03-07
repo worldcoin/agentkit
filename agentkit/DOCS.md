@@ -39,7 +39,7 @@ Services that deal with automated traffic increasingly need to distinguish betwe
 - The server verifies the signature, looks up the agent's human identifier in the AgentBook, and applies the configured access policy
 - Usage limits are tracked per human, not per agent, allowing for multiple agents to share a single human-backed identity
 
-This is a **Server ↔ Client** extension. The Facilitator is not involved in the identity verification flow.
+This is a **Server ↔ Client** extension. The Facilitator is not involved in identity verification itself, but `discount` mode still requires wiring `verifyFailureHook` into the payment flow.
 
 ## Access Modes
 
@@ -137,6 +137,8 @@ app.get('/data', c => {
 serve({ fetch: app.fetch, port: 4021 })
 ```
 
+If your paid route runs on World Chain (`eip155:480`), add a custom `registerMoneyParser(...)` for World Chain USDC on `ExactEvmScheme`. If AgentBook registration and lookup should stay on Base mainnet, pin `createAgentBookVerifier(...)` to Base explicitly instead of relying on the request chain.
+
 ### Mode Examples
 
 In **Free access** mode, human-backed agents never pay:
@@ -199,7 +201,7 @@ const hooks = createAgentkitHooks({
 
 ### Custom AgentBook Configuration
 
-`createAgentBookVerifier()` has a built-in mapping of known AgentBook deployments. The contract address and RPC endpoint are resolved automatically from the agent's `chainId`. You can override the contract address and/or RPC for custom deployments:
+`createAgentBookVerifier()` has a built-in mapping of known AgentBook deployments. Today that mapping covers Base mainnet and Base Sepolia. By default it resolves the contract address and RPC endpoint from the agent's `chainId`. If your payment route runs on World Chain but AgentBook remains on Base, pass Base configuration explicitly:
 
 ```typescript
 // Uses known deployments — no config needed for supported chains
@@ -217,6 +219,15 @@ import { createPublicClient, http } from 'viem'
 
 const agentBook = createAgentBookVerifier({
 	client: createPublicClient({ chain: base, transport: http() }),
+})
+
+// World Chain payments + Base AgentBook lookup
+const agentBook = createAgentBookVerifier({
+	contractAddress: '0xE1D1D3526A6FAa37eb36bD10B933C1b77f4561a4',
+	client: createPublicClient({
+		chain: base,
+		transport: http('https://mainnet.base.org'),
+	}),
 })
 ```
 
@@ -449,6 +460,6 @@ Returns `{ valid: boolean; address?: string; error?: string }`.
 ### AgentBook lookup returns null
 
 - Verify the agent wallet has been registered in the AgentBook with a valid World ID proof
-- Check that `createAgentBookVerifier()` is configured for the correct chain
+- Check that `createAgentBookVerifier()` is configured for the correct lookup chain
 - Ensure the RPC endpoint is reachable
 - Confirm the contract address is correct for the target network

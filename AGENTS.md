@@ -9,6 +9,6 @@ Default registration path: `npx @worldcoin/agentkit-cli --llms`
 - Use for CLI registration flow, World ID verification, `--auto`, or `AgentBook.register(...)`.
 - Start with `npx @worldcoin/agentkit-cli --llms`.
 
-### `agentkit-x402-integration`
+### `integrate-agentkit`
 
-- Use for server integration, hooks, access modes, signature verification, or AgentBook lookups.
+- Use for end-to-end AgentKit + x402 integration: World Chain payments, free/free-trial/discount modes, facilitator wiring, signature verification, or AgentBook lookups.
