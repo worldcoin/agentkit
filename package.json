@@ -2,7 +2,8 @@
 	"name": "x402-agentkit-poc",
 	"private": true,
 	"workspaces": [
-		"agentkit"
+		"agentkit",
+		"sybil-airdrop"
 	],
 	"devDependencies": {
 		"@typescript-eslint/parser": "^8.56.1",

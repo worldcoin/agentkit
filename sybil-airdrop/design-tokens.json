@@ -1,0 +1,94 @@
+{
+  "$type": "designTokens",
+  "$description": "Dropping Air — Minimalist design system. Import via Tokens Studio for Figma.",
+  "color": {
+    "neutral": {
+      "0":   { "$value": "#FFFFFF", "$type": "color" },
+      "50":  { "$value": "#F9FAFB", "$type": "color" },
+      "100": { "$value": "#F3F4F6", "$type": "color" },
+      "200": { "$value": "#E5E7EB", "$type": "color" },
+      "300": { "$value": "#D1D5DB", "$type": "color" },
+      "400": { "$value": "#9CA3AF", "$type": "color" },
+      "500": { "$value": "#6B7280", "$type": "color" },
+      "600": { "$value": "#4B5563", "$type": "color" },
+      "700": { "$value": "#374151", "$type": "color" },
+      "800": { "$value": "#1F2937", "$type": "color" },
+      "900": { "$value": "#111827", "$type": "color" },
+      "950": { "$value": "#030712", "$type": "color" }
+    },
+    "primary": {
+      "50":  { "$value": "#EFF6FF", "$type": "color" },
+      "100": { "$value": "#DBEAFE", "$type": "color" },
+      "500": { "$value": "#3B82F6", "$type": "color" },
+      "600": { "$value": "#2563EB", "$type": "color" },
+      "700": { "$value": "#1D4ED8", "$type": "color" }
+    },
+    "success": {
+      "50":  { "$value": "#F0FDF4", "$type": "color" },
+      "500": { "$value": "#22C55E", "$type": "color" },
+      "700": { "$value": "#15803D", "$type": "color" }
+    },
+    "error": {
+      "50":  { "$value": "#FEF2F2", "$type": "color" },
+      "500": { "$value": "#EF4444", "$type": "color" },
+      "700": { "$value": "#B91C1C", "$type": "color" }
+    },
+    "warning": {
+      "50":  { "$value": "#FFFBEB", "$type": "color" },
+      "500": { "$value": "#F59E0B", "$type": "color" },
+      "700": { "$value": "#B45309", "$type": "color" }
+    },
+    "semantic": {
+      "bg":           { "$value": "{color.neutral.0}", "$type": "color" },
+      "bg-subtle":    { "$value": "{color.neutral.50}", "$type": "color" },
+      "surface":      { "$value": "{color.neutral.0}", "$type": "color" },
+      "surface-raised": { "$value": "{color.neutral.50}", "$type": "color" },
+      "border":       { "$value": "{color.neutral.200}", "$type": "color" },
+      "border-subtle": { "$value": "{color.neutral.100}", "$type": "color" },
+      "text":         { "$value": "{color.neutral.900}", "$type": "color" },
+      "text-secondary": { "$value": "{color.neutral.500}", "$type": "color" },
+      "text-muted":   { "$value": "{color.neutral.400}", "$type": "color" }
+    }
+  },
+  "fontFamily": {
+    "sans":  { "$value": "Inter, system-ui, -apple-system, sans-serif", "$type": "fontFamily" },
+    "mono":  { "$value": "JetBrains Mono, ui-monospace, monospace", "$type": "fontFamily" }
+  },
+  "fontSize": {
+    "xs":   { "$value": "0.75rem",  "$type": "dimension" },
+    "sm":   { "$value": "0.875rem", "$type": "dimension" },
+    "base": { "$value": "1rem",     "$type": "dimension" },
+    "lg":   { "$value": "1.125rem", "$type": "dimension" },
+    "xl":   { "$value": "1.25rem",  "$type": "dimension" },
+    "2xl":  { "$value": "1.5rem",   "$type": "dimension" },
+    "3xl":  { "$value": "1.875rem", "$type": "dimension" }
+  },
+  "fontWeight": {
+    "normal":   { "$value": "400", "$type": "fontWeight" },
+    "medium":   { "$value": "500", "$type": "fontWeight" },
+    "semibold": { "$value": "600", "$type": "fontWeight" }
+  },
+  "spacing": {
+    "1":  { "$value": "0.25rem", "$type": "dimension" },
+    "2":  { "$value": "0.5rem",  "$type": "dimension" },
+    "3":  { "$value": "0.75rem", "$type": "dimension" },
+    "4":  { "$value": "1rem",    "$type": "dimension" },
+    "5":  { "$value": "1.25rem", "$type": "dimension" },
+    "6":  { "$value": "1.5rem",  "$type": "dimension" },
+    "8":  { "$value": "2rem",    "$type": "dimension" },
+    "10": { "$value": "2.5rem",  "$type": "dimension" },
+    "12": { "$value": "3rem",    "$type": "dimension" },
+    "16": { "$value": "4rem",    "$type": "dimension" }
+  },
+  "borderRadius": {
+    "sm":   { "$value": "0.375rem", "$type": "dimension" },
+    "md":   { "$value": "0.5rem",   "$type": "dimension" },
+    "lg":   { "$value": "0.75rem",  "$type": "dimension" },
+    "xl":   { "$value": "1rem",     "$type": "dimension" },
+    "full": { "$value": "9999px",   "$type": "dimension" }
+  },
+  "shadow": {
+    "sm":   { "$value": "0 1px 2px 0 rgba(0,0,0,0.05)", "$type": "boxShadow" },
+    "base": { "$value": "0 1px 3px 0 rgba(0,0,0,0.1), 0 1px 2px -1px rgba(0,0,0,0.1)", "$type": "boxShadow" }
+  }
+}

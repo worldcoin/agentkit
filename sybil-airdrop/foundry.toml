@@ -1,0 +1,4 @@
+[profile.default]
+src = "contracts/src"
+out = "contracts/out"
+libs = ["../node_modules"]

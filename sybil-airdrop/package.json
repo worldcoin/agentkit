@@ -1,0 +1,41 @@
+{
+  "name": "sybil-airdrop",
+  "version": "0.1.0",
+  "private": true,
+  "scripts": {
+    "dev": "next dev",
+    "build": "next build",
+    "start": "next start",
+    "db:generate": "prisma generate",
+    "db:push": "prisma db push",
+    "db:studio": "prisma studio",
+    "deploy:contracts": "bash scripts/deploy.sh",
+    "deploy:agentbook": "bash scripts/deploy-agentbook.sh",
+    "test": "playwright test",
+    "test:ui": "playwright test --ui"
+  },
+  "dependencies": {
+    "@openzeppelin/contracts": "^5.6.1",
+    "@prisma/client": "^6.4.1",
+    "@supabase/supabase-js": "^2.99.0",
+    "@worldcoin/agentkit": "file:../agentkit",
+    "@worldcoin/idkit": "^4.0.8",
+    "next": "15.2.0",
+    "react": "^19.0.0",
+    "react-dom": "^19.0.0",
+    "siwe": "^2.3.2",
+    "viem": "^2.23.5",
+    "zod": "^3.24.2"
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.58.2",
+    "@types/node": "^20.17.22",
+    "@types/react": "^19.0.10",
+    "@types/react-dom": "^19.0.4",
+    "autoprefixer": "^10.4.20",
+    "postcss": "^8.5.3",
+    "prisma": "^6.4.1",
+    "tailwindcss": "^3.4.0",
+    "typescript": "^5.8.3"
+  }
+}

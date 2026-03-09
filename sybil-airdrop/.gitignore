@@ -1,0 +1,18 @@
+.env
+.env.local
+.next/
+node_modules/
+cache/
+contracts/cache/
+contracts/out/
+tsconfig.tsbuildinfo
+*.db
+
+# Playwright
+/test-results/
+/playwright-report/
+/blob-report/
+/playwright/.cache/
+/playwright/.auth/
+
+.vercel

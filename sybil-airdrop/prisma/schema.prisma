@@ -1,0 +1,29 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
+  directUrl = env("DIRECT_URL")
+}
+
+model Claim {
+  id            String   @id @default(cuid())
+  nullifierHash String   @unique
+  agentAddress  String
+  txHash        String
+  amount        String
+  claimedAt     DateTime @default(now())
+}
+
+model Challenge {
+  id        String   @id @default(cuid())
+  nonce     String   @unique
+  domain    String
+  uri       String
+  chainId   String
+  createdAt DateTime @default(now())
+  expiresAt DateTime
+  used      Boolean  @default(false)
+}

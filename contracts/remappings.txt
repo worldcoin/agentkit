@@ -1,4 +1,5 @@
-solady-0.0.210/=dependencies/solady-0.0.210/
-forge-std-1.8.2/=dependencies/forge-std-1.8.2/
-world-id-contracts/=dependencies/world-id-contracts/src/
 @openzeppelin-contracts-5.0.2/=dependencies/@openzeppelin-contracts-5.0.2/
+forge-std-1.8.2/=dependencies/forge-std-1.8.2/
+solady-0.0.210/=dependencies/solady-0.0.210/
+world-id-contracts/=dependencies/world-id-contracts/src/
+forge-std/=dependencies/forge-std-1.8.2/src/
