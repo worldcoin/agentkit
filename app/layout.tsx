@@ -1,5 +1,6 @@
 import type { Metadata } from 'next'
-import ThemeToggle from '@/components/ThemeToggle'
+import Link from 'next/link'
+import { Analytics } from '@vercel/analytics/next'
 import './globals.css'
 
 export const metadata: Metadata = {
@@ -20,10 +21,10 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
               </p>
               <h1 className="font-mono text-sm text-text-primary">Dropping Air Console</h1>
             </div>
-            <ThemeToggle />
-          </header>
-          <main className="flex-1">{children}</main>
-        </div>
+          </div>
+        </nav>
+        <main className="mx-auto max-w-2xl px-6 py-10">{children}</main>
+        <Analytics />
       </body>
     </html>
   )
