@@ -39,3 +39,21 @@ yarn-error.log*
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+
+# contracts build artifacts and dependencies
+contracts/cache
+contracts/out
+contracts/dependencies
+
+# prisma
+prisma/dev.db
+prisma/prisma
+
+# test artifacts
+*.png
+test-results/
+playwright-report/
+
+# misc
+.playwright-mcp/
+sybil-airdrop/
