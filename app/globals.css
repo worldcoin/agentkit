@@ -1,10 +1,59 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap');
+
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
 
-@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap');
+* {
+  box-sizing: border-box;
+}
+
+:root {
+  color-scheme: light;
+}
+
+.dark {
+  color-scheme: dark;
+}
 
 body {
-  background-color: #ffffff;
-  color: #111827;
+  background-color: #050b05;
+  color: #d6ffd6;
+  margin: 0;
+  background-image: radial-gradient(circle at top, rgba(34, 197, 94, 0.08), transparent 35%);
+}
+
+a {
+  color: inherit;
+  text-decoration: none;
+}
+
+.dark body {
+  background-color: #050b05;
+  color: #d6ffd6;
+}
+
+html:not(.dark) body {
+  background-color: #f3fff3;
+  color: #072b07;
+}
+
+.terminal-panel {
+  border: 1px solid rgba(74, 222, 128, 0.35);
+  background: rgba(0, 0, 0, 0.75);
+  border-radius: 12px;
+  padding: 16px;
+  box-shadow: inset 0 0 24px rgba(34, 197, 94, 0.08);
+}
+
+html:not(.dark) .terminal-panel {
+  background: rgba(255, 255, 255, 0.7);
+  border-color: rgba(34, 197, 94, 0.45);
+}
+
+.matrix-grid {
+  background-image:
+    linear-gradient(to right, rgba(74, 222, 128, 0.14) 1px, transparent 1px),
+    linear-gradient(to bottom, rgba(74, 222, 128, 0.14) 1px, transparent 1px);
+  background-size: 32px 32px;
 }

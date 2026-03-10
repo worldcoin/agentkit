@@ -115,15 +115,15 @@ export default function ClaimForm() {
     state.step === 'submitting'
 
   return (
-    <div className="rounded-xl border border-border bg-surface-raised p-5">
-      <div className="mb-4">
-        <h2 className="text-sm font-semibold text-text-primary">Prove & Claim</h2>
-        <p className="text-xs text-text-secondary mt-0.5">
+    <div className="rounded-2xl border border-border p-4">
+      <div className="mb-5">
+        <h2 className="text-base font-semibold text-text-primary">Prove & Claim</h2>
+        <p className="mt-1 text-xs text-text-secondary">
           Sign a challenge to verify your agent is human-backed
         </p>
       </div>
 
-      <div className="space-y-3">
+      <div className="space-y-4">
         {state.step !== 'disconnected' && (
           <div className="flex items-center gap-2 text-xs text-text-muted">
             <StepIndicator
@@ -147,7 +147,7 @@ export default function ClaimForm() {
         )}
 
         {state.step !== 'disconnected' && (
-          <div className="rounded-lg bg-surface-overlay border border-border px-4 py-2 flex items-center justify-between">
+          <div className="flex items-center justify-between rounded-xl border border-border bg-surface-overlay px-4 py-3">
             <span className="text-xs text-text-muted">Connected</span>
             <span className="font-mono text-xs text-text-secondary">
               {state.address.slice(0, 6)}...{state.address.slice(-4)}
@@ -156,8 +156,8 @@ export default function ClaimForm() {
         )}
 
         {state.step === 'success' && (
-          <div className="rounded-lg bg-success-bg border border-success/30 p-4">
-            <p className="text-success font-medium text-sm mb-1">Airdrop claimed!</p>
+          <div className="rounded-xl border border-primary/30 bg-primary/5 p-4">
+            <p className="mb-1 text-sm font-medium text-primary">Airdrop claimed!</p>
             <a
               href={state.explorerUrl}
               target="_blank"
@@ -170,8 +170,8 @@ export default function ClaimForm() {
         )}
 
         {state.step === 'error' && (
-          <div className="rounded-lg bg-error-bg border border-error/30 p-4">
-            <p className="text-error font-medium text-sm mb-1">Failed</p>
+          <div className="rounded-xl border border-border bg-surface-overlay p-4">
+            <p className="mb-1 text-sm font-medium text-text-primary">Failed</p>
             <p className="text-xs text-text-secondary">{state.message}</p>
           </div>
         )}
@@ -179,9 +179,7 @@ export default function ClaimForm() {
         {state.step === 'disconnected' ? (
           <button
             onClick={connect}
-            className="w-full py-2.5 px-6 rounded-lg font-medium text-sm text-white transition-all
-							bg-primary hover:bg-primary-dark active:scale-[0.98]
-							focus:outline-none focus:ring-2 focus:ring-primary/50"
+            className="w-full rounded-xl bg-primary px-6 py-3 text-sm font-medium text-white transition-colors hover:bg-primary-dark focus:outline-none focus:ring-2 focus:ring-primary/40"
           >
             Connect Wallet
           </button>
@@ -189,10 +187,7 @@ export default function ClaimForm() {
           <button
             onClick={claim}
             disabled={isLoading || state.step === 'success'}
-            className="w-full py-2.5 px-6 rounded-lg font-medium text-sm text-white transition-all
-							bg-primary hover:bg-primary-dark active:scale-[0.98]
-							disabled:opacity-50 disabled:cursor-not-allowed
-							focus:outline-none focus:ring-2 focus:ring-primary/50"
+            className="w-full rounded-xl bg-primary px-6 py-3 text-sm font-medium text-white transition-colors hover:bg-primary-dark disabled:cursor-not-allowed disabled:opacity-50 focus:outline-none focus:ring-2 focus:ring-primary/40"
           >
             {isLoading && (
               <svg
@@ -224,6 +219,15 @@ export default function ClaimForm() {
           </button>
         )}
 
+        {state.step !== 'disconnected' && (
+          <Link
+            href="/agent-challenge"
+            className="block text-center text-xs text-text-secondary underline-offset-4 transition-colors hover:text-primary hover:underline"
+          >
+            Try Agent Capability Challenge
+          </Link>
+        )}
+
         {state.step === 'disconnected' && (
           <p className="text-xs text-text-muted text-center">
             Your agent must be{' '}
@@ -251,7 +255,7 @@ function StepIndicator({
     <span
       className={`px-2 py-0.5 rounded text-xs transition-colors ${
         done
-          ? 'bg-success/10 text-success'
+          ? 'bg-primary/10 text-primary'
           : active
             ? 'bg-primary/10 text-primary'
             : 'bg-surface-overlay text-text-muted'

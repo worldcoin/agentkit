@@ -7,8 +7,14 @@ This is the living QA plan for this repository. Update it on every task executio
 | ID | Area | Scenario | Expected | Run in this task | Last result |
 | --- | --- | --- | --- | --- | --- |
 | QA-001 | Home page load | Open `http://localhost:3000` in browser | Page renders without runtime error | yes | pass |
-| QA-002 | Navigation flow | From `/register`, click `Status` in nav and open `/status` | `Claim Status` heading and `Check` form controls are visible | yes | pass |
-| QA-003 | Skills documentation | Verify new workflow skill files exist under `.cursor/skills/` | All 3 skill files are present and readable | yes | pass |
+| QA-002 | Matrix onboarding | Wait for intro typing to finish and observe CTA | `ARE YOU A ROBOT?` button appears only after alert text is typed | yes | pass |
+| QA-003 | Robot gate state | Click `ARE YOU A ROBOT?`, finish/skip onboarding, then continue in same session | Onboarding modal does not appear again unless page refresh | yes | pass |
+| QA-004 | Agent verification stage | After onboarding, connect wallet and run verification challenge | Verification reaches success state only when signed proof validates and AgentBook lookup succeeds | no | not-run |
+| QA-005 | Typing challenge controls | Start challenge, try to paste text into input, and type words | Paste is blocked, words are shown in batches of 10, progress/time counters update | no | not-run |
+| QA-006 | Typing challenge success gate | Complete all 365 words under 60s | Claim button transitions from locked to enabled | no | not-run |
+| QA-007 | Claim submission | With verified agent + passed typing challenge, click claim | Claim request succeeds and transaction link appears | no | not-run |
+| QA-008 | Removed routes hard check | Open `/register`, `/status`, and `/agent-challenge` | Routes are no longer available in root app (404/not found) | yes | pass |
+| QA-009 | Skills documentation | Verify workflow skill files exist under `.cursor/skills/` | Skill files are present and readable | yes | pass |
 
 ## Update Rules
 

@@ -1,5 +1,5 @@
 import type { Metadata } from 'next'
-import Link from 'next/link'
+import ThemeToggle from '@/components/ThemeToggle'
 import './globals.css'
 
 export const metadata: Metadata = {
@@ -9,39 +9,21 @@ export const metadata: Metadata = {
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
-    <html lang="en">
+    <html lang="en" className="dark">
       <body className="min-h-screen bg-surface antialiased">
-        <nav className="sticky top-0 z-50 border-b border-border bg-white">
-          <div className="mx-auto flex h-14 max-w-2xl items-center justify-between px-6">
-            <Link href="/" className="font-semibold text-text-primary">
-              Dropping Air
-            </Link>
-            <div className="flex items-center gap-5">
-              <Link
-                href="/"
-                className="text-sm text-text-secondary transition-colors hover:text-text-primary"
-              >
-                Claim
-              </Link>
-              <Link
-                href="/register"
-                className="text-sm text-text-secondary transition-colors hover:text-text-primary"
-              >
-                Register
-              </Link>
-              <Link
-                href="/status"
-                className="text-sm text-text-secondary transition-colors hover:text-text-primary"
-              >
-                Status
-              </Link>
-              <span className="rounded bg-primary/10 px-2 py-0.5 text-xs font-medium text-primary">
-                Base
-              </span>
+        <div className="matrix-grid pointer-events-none fixed inset-0 opacity-20" />
+        <div className="relative mx-auto flex min-h-screen w-full max-w-3xl flex-col px-4 pb-8 pt-4 sm:px-6">
+          <header className="mb-6 flex items-center justify-between border-b border-border/70 pb-4">
+            <div>
+              <p className="font-mono text-[10px] uppercase tracking-[0.25em] text-primary">
+                Agent Network
+              </p>
+              <h1 className="font-mono text-sm text-text-primary">Dropping Air Console</h1>
             </div>
-          </div>
-        </nav>
-        <main className="mx-auto max-w-2xl px-6 py-10">{children}</main>
+            <ThemeToggle />
+          </header>
+          <main className="flex-1">{children}</main>
+        </div>
       </body>
     </html>
   )

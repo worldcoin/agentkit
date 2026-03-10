@@ -1,6 +1,7 @@
 import type { Config } from 'tailwindcss'
 
 const config: Config = {
+  darkMode: 'class',
   content: [
     './app/**/*.{js,ts,jsx,tsx,mdx}',
     './components/**/*.{js,ts,jsx,tsx,mdx}',
@@ -14,35 +15,35 @@ const config: Config = {
       },
       colors: {
         primary: {
-          DEFAULT: '#3B82F6',
-          dark: '#2563EB',
-          light: '#60A5FA',
-          50: '#EFF6FF',
-          100: '#DBEAFE',
+          DEFAULT: '#22C55E',
+          dark: '#16A34A',
+          light: '#4ADE80',
+          50: '#F0FDF4',
+          100: '#DCFCE7',
         },
         surface: {
           DEFAULT: '#FFFFFF',
-          raised: '#F9FAFB',
-          overlay: '#F3F4F6',
+          raised: '#FFFFFF',
+          overlay: '#F8FAFC',
         },
         border: {
-          DEFAULT: '#E5E7EB',
-          light: '#F3F4F6',
+          DEFAULT: '#E4E4E7',
+          light: '#F4F4F5',
         },
-        'text-primary': '#111827',
-        'text-secondary': '#6B7280',
-        'text-muted': '#9CA3AF',
+        'text-primary': '#09090B',
+        'text-secondary': '#52525B',
+        'text-muted': '#71717A',
         success: {
           DEFAULT: '#22C55E',
           bg: '#F0FDF4',
         },
         error: {
-          DEFAULT: '#EF4444',
-          bg: '#FEF2F2',
+          DEFAULT: '#09090B',
+          bg: '#FAFAFA',
         },
         warning: {
-          DEFAULT: '#F59E0B',
-          bg: '#FFFBEB',
+          DEFAULT: '#09090B',
+          bg: '#FAFAFA',
         },
       },
     },
