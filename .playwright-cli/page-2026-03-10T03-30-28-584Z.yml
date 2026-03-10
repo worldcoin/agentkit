@@ -1,0 +1,31 @@
+- generic [ref=e1]:
+  - generic [ref=e2]:
+    - navigation [ref=e3]:
+      - generic [ref=e4]:
+        - link "Dropping Air" [ref=e5] [cursor=pointer]:
+          - /url: /
+        - generic [ref=e6]: Base
+      - generic [ref=e7]:
+        - link "Claim" [ref=e8] [cursor=pointer]:
+          - /url: /
+        - link "Register" [ref=e9] [cursor=pointer]:
+          - /url: /register
+        - link "Status" [active] [ref=e10] [cursor=pointer]:
+          - /url: /status
+        - link "Agent Test" [ref=e11] [cursor=pointer]:
+          - /url: /agent-challenge
+    - main [ref=e12]:
+      - generic [ref=e66]:
+        - generic [ref=e67]:
+          - heading "Claim Status" [level=1] [ref=e68]
+          - paragraph [ref=e69]: Check if an agent is registered and whether the associated human has claimed.
+        - generic [ref=e70]:
+          - generic [ref=e71]:
+            - heading "Check Status" [level=2] [ref=e72]
+            - paragraph [ref=e73]: Look up registration and claim status by address
+          - generic [ref=e75]:
+            - textbox "0x..." [ref=e76]
+            - button "Check" [ref=e77] [cursor=pointer]
+  - button "Open Next.js Dev Tools" [ref=e61] [cursor=pointer]:
+    - img [ref=e62]
+  - alert [ref=e65]

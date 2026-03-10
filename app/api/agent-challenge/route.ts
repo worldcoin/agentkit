@@ -4,6 +4,17 @@ import { recoverMessageAddress } from 'viem'
 import { z } from 'zod'
 import { agentBook } from '@/lib/agentkit'
 import { env } from '@/lib/config'
+import {
+  createRequestContext,
+  createSyntheticRequestContext,
+  elapsedMs,
+  ERROR_CODES,
+  logEvent,
+  maskAddress,
+  responseError,
+  responseWithRequestId,
+  withSpan,
+} from '@/lib/observability'
 
 type ChallengeRecord = {
   nonce: string
@@ -62,8 +73,13 @@ function trimExpiredChallenges() {
   }
 }
 
-export async function GET() {
+export async function GET(req: NextRequest) {
+  const ctx = createRequestContext(req, '/api/agent-challenge')
   trimExpiredChallenges()
+  logEvent('info', 'agent_challenge.issue.start', {
+    requestId: ctx.requestId,
+    route: ctx.route,
+  })
 
   const challengeId = randomUUID()
   const nonce = randomBytes(16).toString('hex')
@@ -77,7 +93,13 @@ export async function GET() {
     used: false,
   })
 
-  return NextResponse.json({
+  logEvent('info', 'agent_challenge.issue.success', {
+    requestId: ctx.requestId,
+    route: ctx.route,
+    durationMs: elapsedMs(ctx.startedAt),
+  })
+
+  return responseWithRequestId(ctx, {
     challengeId,
     nonce,
     issuedAt,
@@ -99,25 +121,30 @@ export async function GET() {
 }
 
 export async function POST(req: NextRequest) {
+  const ctx = createRequestContext(req, '/api/agent-challenge')
   trimExpiredChallenges()
+  logEvent('info', 'agent_challenge.verify.start', {
+    requestId: ctx.requestId,
+    route: ctx.route,
+  })
 
   try {
     const json = await req.json()
     const parsed = proofSchema.safeParse(json)
     if (!parsed.success) {
-      return NextResponse.json({ error: 'Invalid proof payload' }, { status: 400 })
+      return responseError(ctx, 400, ERROR_CODES.BAD_REQUEST, 'Invalid proof payload')
     }
 
     const { challengeId, proof } = parsed.data
     const challenge = ACTIVE_CHALLENGES.get(challengeId)
     if (!challenge) {
-      return NextResponse.json({ error: 'Unknown challenge' }, { status: 404 })
+      return responseError(ctx, 404, ERROR_CODES.CHALLENGE_NOT_FOUND, 'Unknown challenge')
     }
     if (challenge.used) {
-      return NextResponse.json({ error: 'Challenge already used' }, { status: 409 })
+      return responseError(ctx, 409, ERROR_CODES.CHALLENGE_USED, 'Challenge already used')
     }
     if (new Date(challenge.expiresAt).getTime() < Date.now()) {
-      return NextResponse.json({ error: 'Challenge expired' }, { status: 410 })
+      return responseError(ctx, 410, ERROR_CODES.NONCE_EXPIRED, 'Challenge expired')
     }
 
     const expectedPayload = canonicalizePayload({
@@ -130,39 +157,66 @@ export async function POST(req: NextRequest) {
     })
     const receivedPayload = canonicalizePayload(proof.payload)
     if (receivedPayload !== expectedPayload) {
-      return NextResponse.json({ error: 'Deterministic schema mismatch' }, { status: 400 })
+      return responseError(
+        ctx,
+        400,
+        ERROR_CODES.DETERMINISTIC_PAYLOAD_MISMATCH,
+        'Deterministic schema mismatch'
+      )
     }
     if (proof.nonce !== challenge.nonce || proof.payload.nonce !== challenge.nonce) {
-      return NextResponse.json({ error: 'Nonce mismatch' }, { status: 400 })
+      return responseError(ctx, 400, ERROR_CODES.NONCE_INVALID, 'Nonce mismatch')
     }
     if (proof.payload.challengeId !== challengeId) {
-      return NextResponse.json({ error: 'Challenge ID mismatch' }, { status: 400 })
+      return responseError(ctx, 400, ERROR_CODES.BAD_REQUEST, 'Challenge ID mismatch')
     }
 
     const message = `agent-capability:${expectedPayload}`
-    const recoveredAddress = await recoverMessageAddress({
-      message,
-      signature: proof.signature as `0x${string}`,
-    })
+    const recoveredAddress = await withSpan(
+      'agent_challenge.recover_address',
+      {
+        route: ctx.route,
+      },
+      () =>
+        recoverMessageAddress({
+          message,
+          signature: proof.signature as `0x${string}`,
+        })
+    )
 
     if (recoveredAddress.toLowerCase() !== proof.address.toLowerCase()) {
-      return NextResponse.json({ error: 'Signature check failed' }, { status: 401 })
+      return responseError(ctx, 401, ERROR_CODES.INVALID_SIGNATURE, 'Signature check failed')
     }
     if (proof.delegation.worldIdSignal.toLowerCase() !== proof.address.toLowerCase()) {
-      return NextResponse.json({ error: 'World ID delegation mismatch' }, { status: 403 })
+      return responseError(ctx, 403, ERROR_CODES.INVALID_SIGNATURE, 'World ID delegation mismatch')
     }
-    const humanId = await agentBook.lookupHuman(proof.address, env.NEXT_PUBLIC_CHAIN_ID)
+    const humanId = await withSpan(
+      'agent_challenge.lookup_human',
+      {
+        route: ctx.route,
+      },
+      () => agentBook.lookupHuman(proof.address, env.NEXT_PUBLIC_CHAIN_ID)
+    )
     if (!humanId) {
-      return NextResponse.json(
-        { error: 'Agent is not registered in the AgentBook. Register first.' },
-        { status: 403 }
+      return responseError(
+        ctx,
+        403,
+        ERROR_CODES.AGENT_NOT_REGISTERED,
+        'Agent is not registered in the AgentBook. Register first.'
       )
     }
 
     challenge.used = true
     ACTIVE_CHALLENGES.set(challengeId, challenge)
 
-    return NextResponse.json({
+    logEvent('info', 'agent_challenge.verify.success', {
+      requestId: ctx.requestId,
+      route: ctx.route,
+      wallet: maskAddress(proof.address),
+      durationMs: elapsedMs(ctx.startedAt),
+    })
+
+    return responseWithRequestId(ctx, {
       success: true,
       status: {
         challengeIssued: true,
@@ -174,9 +228,12 @@ export async function POST(req: NextRequest) {
       message,
     })
   } catch (error) {
-    return NextResponse.json(
-      { error: `Challenge verification failed: ${error instanceof Error ? error.message : 'unknown'}` },
-      { status: 500 }
-    )
+    logEvent('error', 'agent_challenge.verify.failed', {
+      requestId: ctx.requestId,
+      route: ctx.route,
+      durationMs: elapsedMs(ctx.startedAt),
+      errorMessage: error instanceof Error ? error.message : 'unknown',
+    })
+    return responseError(ctx, 500, ERROR_CODES.INTERNAL_ERROR, 'Challenge verification failed')
   }
 }

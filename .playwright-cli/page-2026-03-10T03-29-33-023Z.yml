@@ -1,0 +1,73 @@
+- generic:
+  - generic [active]:
+    - generic [ref=e5] [cursor=pointer]:
+      - button "Open Next.js Dev Tools" [ref=e6]:
+        - img [ref=e7]
+      - button "Open issues overlay" [ref=e11]:
+        - generic [ref=e12]:
+          - generic [ref=e13]: "0"
+          - generic [ref=e14]: "1"
+        - generic [ref=e15]: Issue
+    - generic [ref=e18]:
+      - generic [ref=e19]:
+        - navigation [ref=e21]:
+          - button "previous" [disabled] [ref=e22]:
+            - img "previous" [ref=e23]
+          - generic [ref=e25]:
+            - generic [ref=e26]: 1/
+            - text: "1"
+          - button "next" [disabled] [ref=e27]:
+            - img "next" [ref=e28]
+        - link "Next.js 15.4.10 (outdated) Turbopack" [ref=e31] [cursor=pointer]:
+          - /url: https://nextjs.org/docs/messages/version-staleness
+          - img [ref=e32]
+          - generic "An outdated version detected (latest is 16.1.6), upgrade is highly recommended!" [ref=e34]: Next.js 15.4.10 (outdated)
+          - generic [ref=e35]: Turbopack
+      - dialog "Build Error" [ref=e37]:
+        - generic [ref=e40]:
+          - generic [ref=e41]:
+            - generic [ref=e42]:
+              - generic [ref=e44]: Build Error
+              - generic [ref=e45]:
+                - button "Copy Stack Trace" [ref=e46] [cursor=pointer]:
+                  - img [ref=e47]
+                - button "No related documentation found" [disabled] [ref=e49]:
+                  - img [ref=e50]
+                - link "Learn more about enabling Node.js inspector for server code with Chrome DevTools" [ref=e52] [cursor=pointer]:
+                  - /url: https://nextjs.org/docs/app/building-your-application/configuring/debugging#server-side-code
+                  - img [ref=e53]
+            - paragraph [ref=e62]: Parsing css source code failed
+          - generic [ref=e64]:
+            - generic [ref=e66]:
+              - img [ref=e68]
+              - generic [ref=e70]: ./app/globals.css (924:9)
+              - button "Open in editor" [ref=e71] [cursor=pointer]:
+                - img [ref=e73]
+            - generic [ref=e76]:
+              - generic [ref=e77]: Parsing css source code failed
+              - generic [ref=e78]: 922 |
+              - generic [ref=e79]: "}"
+              - generic [ref=e80]: 923 |
+              - text: ">"
+              - generic [ref=e81]: 924 |
+              - text: "@import"
+              - generic [ref=e82]: url(
+              - link "'https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap'" [ref=e84] [cursor=pointer]:
+                - /url: https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap
+              - text: );
+              - generic [ref=e85]: "|"
+              - text: ^
+              - generic [ref=e86]: 925 |
+              - generic [ref=e87]: 926 |
+              - text: "*"
+              - generic [ref=e88]: "{"
+              - generic [ref=e89]: 927 |
+              - generic [ref=e90]: box
+              - text: "-sizing:"
+              - generic [ref=e91]: border
+              - text: "-box;"
+              - generic [ref=e92]: "@import rules must precede all rules aside from @charset and @layer statements at [project]/app/globals.css:923:8 Import trace: ./app/globals.css [Client Component Browser] ./app/layout.tsx [Server Component]"
+        - generic [ref=e93]:
+          - generic [ref=e94]: "1"
+          - generic [ref=e95]: "2"
+  - alert [ref=e96]

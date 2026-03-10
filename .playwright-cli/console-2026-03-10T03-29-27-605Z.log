@@ -1,0 +1,71 @@
+[     297ms] [ERROR] Failed to load resource: the server responded with a status of 500 (Internal Server Error) @ http://localhost:3000/:0
+[     472ms] Error: ./app/globals.css:924:9
+Parsing css source code failed
+  922 | }
+  923 |
+> 924 | @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap');
+      |         ^
+  925 |
+  926 | * {
+  927 |   box-sizing: border-box;
+
+@import rules must precede all rules aside from @charset and @layer statements at [project]/app/globals.css:923:8
+
+Import trace:
+  ./app/globals.css [Client Component Browser]
+  ./app/layout.tsx [Server Component]
+
+
+    at <unknown> (Error: ./app/globals.css:924:9)
+    at <unknown> (import rules must precede all rules aside from @charset and @layer statements at [project]/app/globals.css:923:8)
+    at Object.getCompilationErrors (file:///Users/mateosauton/Desktop/MiniApps/agentkit/node_modules/.pnpm/next@15.4.10_react-dom@19.2.4_react@19.2.4__react@19.2.4/node_modules/next/dist/server/dev/hot-reloader-turbopack.js:760:59)
+    at DevBundlerService.getCompilationError (file:///Users/mateosauton/Desktop/MiniApps/agentkit/node_modules/.pnpm/next@15.4.10_react-dom@19.2.4_react@19.2.4__react@19.2.4/node_modules/next/dist/server/lib/dev-bundler-service.js:39:55)
+    at DevServer.getCompilationError (file:///Users/mateosauton/Desktop/MiniApps/agentkit/node_modules/.pnpm/next@15.4.10_react-dom@19.2.4_react@19.2.4__react@19.2.4/node_modules/next/dist/server/dev/next-dev-server.js:686:42)
+    at DevServer.findPageComponents (file:///Users/mateosauton/Desktop/MiniApps/agentkit/node_modules/.pnpm/next@15.4.10_react-dom@19.2.4_react@19.2.4__react@19.2.4/node_modules/next/dist/server/dev/next-dev-server.js:656:43)
+    at async DevServer.renderErrorToResponseImpl (file:///Users/mateosauton/Desktop/MiniApps/agentkit/node_modules/.pnpm/next@15.4.10_react-dom@19.2.4_react@19.2.4__react@19.2.4/node_modules/next/dist/server/base-server.js:2614:26)
+[     466ms] [ERROR] ./app/globals.css:924:9
+Parsing css source code failed
+  922 | }
+  923 |
+> 924 | @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap');
+      |         ^
+  925 |
+  926 | * {
+  927 |   box-sizing: border-box;
+
+@import rules must precede all rules aside from @charset and @layer statements at [project]/app/globals.css:923:8
+
+Import trace:
+  ./app/globals.css [Client Component Browser]
+  ./app/layout.tsx [Server Component] @ http://localhost:3000/_next/static/chunks/e570a_next_dist_2a4e67be._.js:1680
+[     473ms] [ERROR] Failed to load resource: the server responded with a status of 404 (Not Found) @ http://localhost:3000/favicon.ico:0
+[     537ms] [ERROR] ./app/globals.css:924:9
+Parsing css source code failed
+  922 | }
+  923 |
+> 924 | @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap');
+      |         ^
+  925 |
+  926 | * {
+  927 |   box-sizing: border-box;
+
+@import rules must precede all rules aside from @charset and @layer statements at [project]/app/globals.css:923:8
+
+Import trace:
+  ./app/globals.css [Client Component Browser]
+  ./app/layout.tsx [Server Component] @ http://localhost:3000/_next/static/chunks/e570a_next_dist_2a4e67be._.js:1680
+[    4959ms] [ERROR] ./app/globals.css:924:9
+Parsing css source code failed
+  922 | }
+  923 |
+> 924 | @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap');
+      |         ^
+  925 |
+  926 | * {
+  927 |   box-sizing: border-box;
+
+@import rules must precede all rules aside from @charset and @layer statements at [project]/app/globals.css:923:8
+
+Import trace:
+  ./app/globals.css [Client Component Browser]
+  ./app/layout.tsx [Server Component] @ http://localhost:3000/_next/static/chunks/e570a_next_dist_2a4e67be._.js:1680
