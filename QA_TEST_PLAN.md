@@ -19,6 +19,8 @@ This is the living QA plan for this repository. Update it on every task executio
 | QA-011 | API error taxonomy | Trigger a failing challenge request in local env | Error response includes safe `error` text, stable `code`, and `requestId` | yes | pass |
 | QA-012 | Onboarding interaction regression | Open home page, wait for CTA, click `ARE YOU A ROBOT?` | Onboarding modal appears with `Step 1` and CTA switches to `ROBOT CONFIRMED` | yes | pass |
 | QA-013 | Observability docs | Open `docs/OBSERVABILITY_RUNBOOK.md` | Runbook lists key events, dashboards, alert thresholds, and triage workflow | yes | pass |
+| QA-014 | Local dev startup | Run `pnpm dev` from repo root and load app URL | Next.js dev server boots successfully and responds with `200 OK` (uses next open port if `3000` is busy) | yes | pass |
+| QA-015 | Preview deployment | Run `vercel deploy -y` from repo root | Vercel preview build completes and returns a reachable preview URL | yes | pass |
 
 ## Update Rules
 
