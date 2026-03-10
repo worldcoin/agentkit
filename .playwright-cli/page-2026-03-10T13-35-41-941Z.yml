@@ -1,0 +1,14 @@
+- generic [active] [ref=e1]:
+  - generic [ref=e2]:
+    - banner [ref=e3]:
+      - generic [ref=e4]:
+        - paragraph [ref=e5]: Agent Network
+        - heading "Dropping Air Console" [level=1] [ref=e6]
+      - button "Light mode" [ref=e7] [cursor=pointer]
+    - main [ref=e8]:
+      - generic [ref=e10]:
+        - heading "404" [level=1] [ref=e11]
+        - heading "This page could not be found." [level=2] [ref=e13]
+  - button "Open Next.js Dev Tools" [ref=e19] [cursor=pointer]:
+    - img [ref=e20]
+  - alert [ref=e23]

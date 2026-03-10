@@ -1,0 +1,5 @@
+pnpm-lock.yaml
+contracts
+prisma/dev.db
+scripts
+.next

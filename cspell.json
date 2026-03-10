@@ -1,0 +1,45 @@
+{
+  "version": "0.2",
+  "enabled": true,
+  "language": "en-US",
+  "allowCompoundWords": true,
+  "dictionaries": ["typescript", "node", "npm", "html"],
+  "enabledLanguageIds": [
+    "typescript",
+    "typescriptreact",
+    "javascript",
+    "markdown",
+    "yaml",
+    "json"
+  ],
+  "words": [
+    "agentkit",
+    "agentbook",
+    "airdrop",
+    "basescan",
+    "clsx",
+    "formatjs",
+    "idkit",
+    "merkle",
+    "minikit",
+    "nullifier",
+    "pkce",
+    "siwe",
+    "supabase",
+    "sybil",
+    "testid",
+    "USDCE",
+    "viem",
+    "webp"
+  ],
+  "ignorePaths": [
+    "node_modules",
+    ".next",
+    "pnpm-lock.yaml",
+    "contracts",
+    "prisma",
+    "scripts",
+    "design-tokens.json",
+    "sybil-airdrop"
+  ]
+}

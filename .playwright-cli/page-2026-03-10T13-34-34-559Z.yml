@@ -1,0 +1,14 @@
+- generic [active] [ref=e1]:
+  - generic [ref=e2]:
+    - banner [ref=e3]:
+      - generic [ref=e4]:
+        - paragraph [ref=e5]: Agent Network
+        - heading "Dropping Air Console" [level=1] [ref=e6]
+      - button "Light mode" [ref=e7] [cursor=pointer]
+    - main [ref=e8]:
+      - generic [ref=e11]:
+        - paragraph [ref=e12]: ALERT! This is|
+        - paragraph [ref=e14]: "> System idle. Awaiting robot authentication."
+  - button "Open Next.js Dev Tools" [ref=e20] [cursor=pointer]:
+    - img [ref=e21]
+  - alert [ref=e24]

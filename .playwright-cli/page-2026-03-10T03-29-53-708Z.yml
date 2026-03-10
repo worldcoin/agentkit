@@ -1,0 +1,61 @@
+- generic [active] [ref=e1]:
+  - generic [ref=e2]:
+    - navigation [ref=e3]:
+      - generic [ref=e4]:
+        - link "Dropping Air" [ref=e5] [cursor=pointer]:
+          - /url: /
+        - generic [ref=e6]: Base
+      - generic [ref=e7]:
+        - link "Claim" [ref=e8] [cursor=pointer]:
+          - /url: /
+        - link "Register" [ref=e9] [cursor=pointer]:
+          - /url: /register
+        - link "Status" [ref=e10] [cursor=pointer]:
+          - /url: /status
+        - link "Agent Test" [ref=e11] [cursor=pointer]:
+          - /url: /agent-challenge
+    - main [ref=e12]:
+      - generic [ref=e13]:
+        - generic [ref=e14]:
+          - heading "Claim Airdrop" [level=1] [ref=e15]
+          - paragraph [ref=e16]: Prove your agent is backed by a real human and claim your tokens. One claim per human.
+          - 'link "New: Agent Capability Challenge" [ref=e17] [cursor=pointer]':
+            - /url: /agent-challenge
+        - generic [ref=e18]:
+          - heading "Campaign" [level=2] [ref=e19]
+          - generic [ref=e20]:
+            - generic [ref=e21]:
+              - paragraph [ref=e22]: Per claim
+              - paragraph [ref=e23]: 1.0 DROP
+            - generic [ref=e24]:
+              - paragraph [ref=e25]: Network
+              - paragraph [ref=e26]: Base
+            - generic [ref=e27]:
+              - paragraph [ref=e28]: Limit
+              - paragraph [ref=e29]: 1 / human
+        - generic [ref=e30]:
+          - generic [ref=e31]:
+            - heading "Prove & Claim" [level=2] [ref=e32]
+            - paragraph [ref=e33]: Sign a challenge to verify your agent is human-backed
+          - generic [ref=e34]:
+            - button "Connect Wallet" [ref=e35] [cursor=pointer]
+            - paragraph [ref=e36]:
+              - text: Your agent must be
+              - link "registered" [ref=e37] [cursor=pointer]:
+                - /url: /register
+              - text: first.
+        - generic [ref=e38]:
+          - heading "How it works" [level=3] [ref=e39]
+          - generic [ref=e40]:
+            - generic [ref=e41]:
+              - paragraph [ref=e42]: Step 1
+              - paragraph [ref=e43]: Register your agent in the AgentBook with World ID.
+            - generic [ref=e44]:
+              - paragraph [ref=e45]: Step 2
+              - paragraph [ref=e46]: Sign a challenge to prove wallet ownership.
+            - generic [ref=e47]:
+              - paragraph [ref=e48]: Step 3
+              - paragraph [ref=e49]: Claim tokens. The server verifies and sends them.
+  - button "Open Next.js Dev Tools" [ref=e55] [cursor=pointer]:
+    - img [ref=e56]
+  - alert [ref=e59]
