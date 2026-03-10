@@ -21,6 +21,7 @@
   "dependencies": {
     "@prisma/client": "^6.4.1",
     "@supabase/supabase-js": "^2.49.1",
+    "@vercel/analytics": "^1.6.1",
     "@worldcoin/agentkit": "^0.0.3",
     "@worldcoin/idkit": "^4.0.8",
     "next": "15.4.10",
