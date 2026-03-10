@@ -5,6 +5,7 @@ import Link from 'next/link'
 import { createWalletClient, custom } from 'viem'
 import { base } from 'viem/chains'
 import { SiweMessage } from 'siwe'
+import { getResponseRequestId, trackClientEvent } from '@/lib/client-telemetry'
 
 type ClaimState =
   | { step: 'disconnected' }
@@ -36,10 +37,17 @@ export default function ClaimForm() {
     const { address } = state
 
     try {
+      trackClientEvent({ event: 'claim_form.start', step: 'challenge-fetch' })
       setState({ step: 'fetching-challenge', address })
       const challengeRes = await fetch('/api/challenge')
       if (!challengeRes.ok) throw new Error('Failed to fetch challenge')
+      const challengeRequestId = getResponseRequestId(challengeRes)
       const challenge = await challengeRes.json()
+      trackClientEvent({
+        event: 'claim_form.challenge_received',
+        requestId: challengeRequestId,
+        route: '/api/challenge',
+      })
 
       setState({ step: 'signing', address })
       const ethereum = (
@@ -90,8 +98,14 @@ export default function ClaimForm() {
         body: JSON.stringify({ payload }),
       })
 
+      const claimRequestId = getResponseRequestId(res)
       const data = await res.json()
       if (!res.ok) throw new Error(data.error || 'Claim failed')
+      trackClientEvent({
+        event: 'claim_form.success',
+        requestId: claimRequestId,
+        route: '/api/claim',
+      })
 
       setState({
         step: 'success',
@@ -100,7 +114,11 @@ export default function ClaimForm() {
         explorerUrl: `https://basescan.org/tx/${data.txHash}`,
       })
     } catch (e) {
-      console.error(e)
+      trackClientEvent({
+        level: 'error',
+        event: 'claim_form.failed',
+        message: (e as Error).message,
+      })
       setState({
         step: 'error',
         address,

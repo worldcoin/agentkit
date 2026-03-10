@@ -1,4 +1,4 @@
-import { NextRequest, NextResponse } from 'next/server'
+import { NextRequest } from 'next/server'
 import {
   parseAgentkitHeader,
   validateAgentkitMessage,
@@ -125,7 +125,7 @@ export async function POST(req: NextRequest) {
       {
         route: ctx.route,
       },
-      () =>
+      async () =>
         db
           .from('Claim')
           .select('*')
@@ -164,7 +164,7 @@ export async function POST(req: NextRequest) {
       {
         route: ctx.route,
       },
-      () =>
+      async () =>
         db.from('Claim').insert({
           nullifierHash,
           agentAddress,

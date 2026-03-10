@@ -1,12 +1,11 @@
 import { randomBytes, randomUUID } from 'crypto'
-import { NextRequest, NextResponse } from 'next/server'
+import { NextRequest } from 'next/server'
 import { recoverMessageAddress } from 'viem'
 import { z } from 'zod'
 import { agentBook } from '@/lib/agentkit'
 import { env } from '@/lib/config'
 import {
   createRequestContext,
-  createSyntheticRequestContext,
   elapsedMs,
   ERROR_CODES,
   logEvent,

@@ -1,4 +1,5 @@
 import { z } from 'zod'
+import { logEvent } from '@/lib/observability'
 
 const envSchema = z.object({
   AGENTBOOK_CONTRACT_ADDRESS: z.string().startsWith('0x'),
@@ -17,7 +18,9 @@ export function getEnv() {
   if (_env) return _env
   const result = envSchema.safeParse(process.env)
   if (!result.success) {
-    console.error('Invalid environment variables:', result.error.format())
+    logEvent('error', 'config.env.invalid', {
+      issues: result.error.issues.map(issue => issue.path.join('.')).filter(Boolean),
+    })
     throw new Error('Invalid environment variables')
   }
   _env = result.data

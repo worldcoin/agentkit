@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState } from 'react'
 import { SiweMessage } from 'siwe'
 import { createWalletClient, custom } from 'viem'
 import { base } from 'viem/chains'
+import { getResponseRequestId, trackClientEvent } from '@/lib/client-telemetry'
 
 const ALERT_TEXT = 'ALERT! This is a agent only website, no humans allowed'
 const WORD_TARGET = 365
@@ -170,10 +171,17 @@ export default function MatrixOnboardingFlow() {
     if (!walletAddress) return
     setVerifyState('loading')
     appendLog('Issuing verification challenge...')
+    trackClientEvent({ event: 'agent_verification.start', step: 'challenge-fetch' })
     try {
       const challengeRes = await fetch('/api/agent-challenge')
       if (!challengeRes.ok) throw new Error('Failed to issue verification challenge')
+      const challengeRequestId = getResponseRequestId(challengeRes)
       const challenge = await challengeRes.json()
+      trackClientEvent({
+        event: 'agent_verification.challenge_issued',
+        requestId: challengeRequestId,
+        route: '/api/agent-challenge',
+      })
 
       const ethereum = (
         window as unknown as {
@@ -212,14 +220,25 @@ export default function MatrixOnboardingFlow() {
           },
         }),
       })
+      const verifyRequestId = getResponseRequestId(verifyRes)
       const verifyData = await verifyRes.json()
       if (!verifyRes.ok) throw new Error(verifyData.error || 'Agent verification failed')
 
       setVerifyState('success')
       appendLog('Agent verified successfully.')
+      trackClientEvent({
+        event: 'agent_verification.success',
+        requestId: verifyRequestId,
+        route: '/api/agent-challenge',
+      })
     } catch (error) {
       setVerifyState('error')
       appendLog(`Verification failed: ${(error as Error).message}`)
+      trackClientEvent({
+        level: 'error',
+        event: 'agent_verification.failed',
+        message: (error as Error).message,
+      })
     }
   }
 
@@ -259,10 +278,17 @@ export default function MatrixOnboardingFlow() {
     setClaimError(null)
     setClaimState('fetching-challenge')
     appendLog('Fetching CAIP-122 challenge for claim...')
+    trackClientEvent({ event: 'claim.start', step: 'challenge-fetch' })
     try {
       const challengeRes = await fetch('/api/challenge')
       if (!challengeRes.ok) throw new Error('Failed to fetch challenge')
+      const challengeRequestId = getResponseRequestId(challengeRes)
       const challenge = await challengeRes.json()
+      trackClientEvent({
+        event: 'claim.challenge_received',
+        requestId: challengeRequestId,
+        route: '/api/challenge',
+      })
 
       setClaimState('signing')
       appendLog('Signing claim payload...')
@@ -310,17 +336,28 @@ export default function MatrixOnboardingFlow() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ payload: btoa(JSON.stringify(payloadData)) }),
       })
+      const claimRequestId = getResponseRequestId(res)
       const data = await res.json()
       if (!res.ok) throw new Error(data.error || 'Claim failed')
 
       setClaimState('success')
       setTxHash(data.txHash)
       appendLog(`Claim success: ${data.txHash.slice(0, 10)}...`)
+      trackClientEvent({
+        event: 'claim.success',
+        requestId: claimRequestId,
+        route: '/api/claim',
+      })
     } catch (error) {
       const message = (error as Error).message
       setClaimState('error')
       setClaimError(message)
       appendLog(`Claim failed: ${message}`)
+      trackClientEvent({
+        level: 'error',
+        event: 'claim.failed',
+        message,
+      })
     }
   }
 

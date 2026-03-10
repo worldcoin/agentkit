@@ -35,3 +35,7 @@
 ### Environment Variables
 
 - To keep ENVs in sync with TypeScript types, you can use the `env.d.ts` file. This file is used to define the types of the ENVs that are used in the app. If you add a new ENV, make sure to add it to the `Env` type in `env.d.ts`.
+
+### Observability
+
+- Operational logging, tracing, alerts, and incident triage are documented in `docs/OBSERVABILITY_RUNBOOK.md`.

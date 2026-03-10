@@ -15,6 +15,10 @@ This is the living QA plan for this repository. Update it on every task executio
 | QA-007 | Claim submission | With verified agent + passed typing challenge, click claim | Claim request succeeds and transaction link appears | no | not-run |
 | QA-008 | Removed routes hard check | Open `/register`, `/status`, and `/agent-challenge` | Routes are no longer available in root app (404/not found) | yes | pass |
 | QA-009 | Skills documentation | Verify workflow skill files exist under `.cursor/skills/` | Skill files are present and readable | yes | pass |
+| QA-010 | API request correlation | Call `GET /api/challenge` from local app | Response includes `x-request-id` header and `requestId` JSON field with matching values | yes | pass |
+| QA-011 | API error taxonomy | Trigger a failing challenge request in local env | Error response includes safe `error` text, stable `code`, and `requestId` | yes | pass |
+| QA-012 | Onboarding interaction regression | Open home page, wait for CTA, click `ARE YOU A ROBOT?` | Onboarding modal appears with `Step 1` and CTA switches to `ROBOT CONFIRMED` | yes | pass |
+| QA-013 | Observability docs | Open `docs/OBSERVABILITY_RUNBOOK.md` | Runbook lists key events, dashboards, alert thresholds, and triage workflow | yes | pass |
 
 ## Update Rules
 

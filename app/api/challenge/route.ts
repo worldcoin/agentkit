@@ -33,7 +33,7 @@ export async function GET(req: NextRequest) {
       {
         route: ctx.route,
       },
-      () =>
+      async () =>
         db.from('Challenge').insert({
           nonce,
           domain,
