@@ -17,17 +17,18 @@ export async function validateAgentkitMessage(
 		}
 	}
 
-	let messageOrigin: string
+	let messageHost: string
 	try {
-		messageOrigin = new URL(message.uri).origin
+		const messageUrl = new URL(message.uri)
+		messageHost = messageUrl.host
 	} catch {
 		return { valid: false, error: `Invalid URI: "${message.uri}"` }
 	}
 
-	if (messageOrigin !== expectedUrl.origin) {
+	if (messageHost !== expectedUrl.host) {
 		return {
 			valid: false,
-			error: `URI mismatch: expected origin "${expectedUrl.origin}", got "${messageOrigin}"`,
+			error: `URI mismatch: expected host "${expectedUrl.host}", got "${messageHost}"`,
 		}
 	}
 

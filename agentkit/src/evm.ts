@@ -1,6 +1,6 @@
 import { SiweMessage } from 'siwe'
-import { verifyMessage } from 'viem'
-import type { EVMMessageVerifier, CompleteAgentkitInfo } from './types'
+import { getPublicClient } from './viem-client'
+import type { CompleteAgentkitInfo } from './types'
 
 export function extractEVMChainId(chainId: string): number {
 	const match = /^eip155:(\d+)$/.exec(chainId)
@@ -31,21 +31,23 @@ export function formatSIWEMessage(info: CompleteAgentkitInfo, address: string): 
 	return siweMessage.prepareMessage()
 }
 
+/**
+ * Verify an EVM signature using ERC-1271 (smart wallets) with ecrecover fallback (EOA).
+ * Uses viem's publicClient.verifyMessage which handles both automatically.
+ */
 export async function verifyEVMSignature(
 	message: string,
 	address: string,
 	signature: string,
-	verifier?: EVMMessageVerifier
+	chainId: string,
+	rpcUrl?: string
 ): Promise<boolean> {
-	const args = {
+	const numericChainId = extractEVMChainId(chainId)
+	const client = getPublicClient(numericChainId, rpcUrl)
+
+	return client.verifyMessage({
 		address: address as `0x${string}`,
 		message,
 		signature: signature as `0x${string}`,
-	}
-
-	if (verifier) {
-		return verifier(args)
-	}
-
-	return verifyMessage(args)
+	})
 }

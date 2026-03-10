@@ -2,6 +2,34 @@
 
 Verify that an agent is backed by a real, World ID-verified human.
 
+## Install
+
+Install the library from npm:
+
+```bash
+npm install @worldcoin/agentkit
+```
+
+or:
+
+```bash
+bun add @worldcoin/agentkit
+```
+
+If you also need the registration CLI, install:
+
+```bash
+npm install -g @worldcoin/agentkit-cli
+```
+
+or run it with:
+
+```bash
+npx @worldcoin/agentkit-cli register <agent-address>
+```
+
+For the end-user registration flow, see [`../cli/REGISTRATION.md`](../cli/REGISTRATION.md).
+
 ## Overview
 
 Services that deal with automated traffic increasingly need to distinguish between "random bot" and "bot acting on behalf of a human". AgentKit solves this by combining the wallet every x402 agent already has with World ID's proof-of-personhood and an on-chain agent registry (the AgentBook).
@@ -11,7 +39,7 @@ Services that deal with automated traffic increasingly need to distinguish betwe
 - The server verifies the signature, looks up the agent's human identifier in the AgentBook, and applies the configured access policy
 - Usage limits are tracked per human, not per agent, allowing for multiple agents to share a single human-backed identity
 
-This is a **Server ↔ Client** extension. The Facilitator is not involved in the identity verification flow.
+This is a **Server ↔ Client** extension. The Facilitator is not involved in identity verification itself, but `discount` mode still requires wiring `verifyFailureHook` into the payment flow.
 
 ## Access Modes
 
@@ -35,6 +63,8 @@ Usage counters are tracked per **human** per **endpoint** — so two agents back
 
 ## Server Usage
 
+AgentKit is published as `@worldcoin/agentkit` and is intended to be consumed as a normal npm package in your server application.
+
 ### Hooks (Recommended)
 
 The hooks-based approach handles challenge generation, signature verification, and AgentBook lookups automatically.
@@ -53,7 +83,7 @@ import {
 	InMemoryAgentKitStorage,
 } from '@worldcoin/agentkit'
 
-const NETWORK = 'eip155:84532' // Base Sepolia
+const NETWORK = 'eip155:8453' // Base
 const payTo = '0xYourAddress'
 
 const agentBook = createAgentBookVerifier()
@@ -107,6 +137,8 @@ app.get('/data', c => {
 serve({ fetch: app.fetch, port: 4021 })
 ```
 
+If your paid route runs on World Chain (`eip155:480`), add a custom `registerMoneyParser(...)` for World Chain USDC on `ExactEvmScheme`. AgentBook lookup only uses the built-in Base mainnet and Base Sepolia deployments: Base Sepolia requests use Base Sepolia, and all other built-in lookups default to Base mainnet.
+
 ### Mode Examples
 
 In **Free access** mode, human-backed agents never pay:
@@ -149,31 +181,30 @@ The client pays the discounted price. Payment verification fails (amount too low
 
 ### Smart Wallet Support (EIP-1271 / EIP-6492)
 
-To support contract wallets (Safe, Coinbase Smart Wallet, etc.), pass a viem public client's `verifyMessage` function:
+Signature verification automatically handles both smart contract wallets (ERC-1271) and EOA wallets (ecrecover). Smart wallets like Safe, Coinbase Smart Wallet, and CDP wallets work out of the box with no additional configuration. A public client is created internally from the chain ID to make the on-chain `isValidSignature` call when needed.
+
+To use a custom RPC endpoint instead of the chain's default public RPC:
 
 ```typescript
-import { baseSepolia } from 'viem/chains'
-import { createPublicClient, http } from 'viem'
-
-const publicClient = createPublicClient({
-	chain: baseSepolia,
-	transport: http(),
-})
-
 const hooks = createAgentkitHooks({
 	agentBook,
 	mode: { type: 'free' },
-	verifyOptions: { evmVerifier: publicClient.verifyMessage },
+	rpcUrl: 'https://your-rpc-endpoint.com',
 })
 ```
 
 ### Custom AgentBook Configuration
 
-`createAgentBookVerifier()` has a built-in mapping of known AgentBook deployments (currently Base Sepolia). The contract address and RPC endpoint are resolved automatically from the agent's `chainId`. You can override the contract address and/or RPC for custom deployments:
+`createAgentBookVerifier()` has a built-in mapping of known AgentBook deployments. Today that mapping covers Base mainnet and Base Sepolia only. By default, Base Sepolia requests use the Base Sepolia deployment and all other built-in lookups use Base mainnet. Use `network` to pin lookup explicitly, or pass a custom client/address for a custom deployment:
 
 ```typescript
 // Uses known deployments — no config needed for supported chains
 const agentBook = createAgentBookVerifier()
+
+// Force Base Sepolia even if the request is signed on another chain
+const agentBook = createAgentBookVerifier({
+	network: 'base-sepolia',
+})
 
 // Custom deployment (e.g., local Anvil)
 const agentBook = createAgentBookVerifier({
@@ -188,6 +219,9 @@ import { createPublicClient, http } from 'viem'
 const agentBook = createAgentBookVerifier({
 	client: createPublicClient({ chain: base, transport: http() }),
 })
+
+// World Chain payments + Base AgentBook lookup (default built-in behavior)
+const agentBook = createAgentBookVerifier()
 ```
 
 ### Manual Usage (Advanced)
@@ -312,7 +346,7 @@ Creates hooks for `x402HTTPResourceServer` and optionally `x402ResourceServer`.
 | `agentBook`     | `AgentBookVerifier`                  | AgentBook verifier instance (required).                                |
 | `mode`          | `AgentkitMode`                       | Access mode (default: `{ type: "free" }`).                             |
 | `storage`       | `AgentKitStorage`                    | Storage for usage tracking (required for `free-trial` and `discount`). |
-| `verifyOptions` | `AgentkitVerifyOptions`              | Signature verification options (e.g., smart wallet support).           |
+| `rpcUrl`        | `string`                             | Custom RPC URL for EVM signature verification. Uses the chain's default public RPC if omitted. |
 | `onEvent`       | `(event: AgentkitHookEvent) => void` | Callback for logging/debugging.                                        |
 
 **Returns:**
@@ -332,15 +366,16 @@ Creates hooks for `x402HTTPResourceServer` and optionally `x402ResourceServer`.
 
 ### `createAgentBookVerifier(options?)`
 
-Creates a verifier that looks up agent wallet addresses in the AgentBook contract. Contract addresses are resolved from a built-in network→address mapping using the agent's `chainId`, unless overridden. Throws if no deployment is known for the given chain and no custom address is configured.
+Creates a verifier that looks up agent wallet addresses in the AgentBook contract. Built-in lookup only targets the Base mainnet and Base Sepolia AgentBook deployments. Base Sepolia requests use Base Sepolia; all other built-in lookups use Base mainnet. Custom clients and custom contract addresses still override this behavior.
 
 | Option            | Type                | Description                                                                            |
 | ----------------- | ------------------- | -------------------------------------------------------------------------------------- |
+| `network`         | `"base" \| "base-sepolia"` | Pin built-in lookup to Base mainnet or Base Sepolia.                             |
 | `client`          | `PublicClient`      | Custom viem public client. Overrides automatic client creation.                        |
 | `contractAddress` | `` `0x${string}` `` | Custom contract address. Overrides the built-in network→address mapping.               |
 | `rpcUrl`          | `string`            | Custom RPC URL. Used when creating clients automatically (ignored if `client` is set). |
 
-Returns an object with `lookupHuman(address: string, chainId: string): Promise<string | null>`. The `chainId` is a CAIP-2 identifier (e.g., `"eip155:84532"`) used to resolve the contract address and RPC endpoint. Returns the anonymous human identifier (hex string) or `null` if the agent is not registered.
+Returns an object with `lookupHuman(address: string, chainId: string): Promise<string | null>`. The `chainId` is a CAIP-2 identifier (for example, `"eip155:480"` or `"eip155:84532"`). It is used to choose between Base mainnet and Base Sepolia for built-in lookup unless `network`, `client`, or `contractAddress` overrides that behavior. Returns the anonymous human identifier (hex string) or `null` if the agent is not registered.
 
 ### `AgentKitStorage` / `InMemoryAgentKitStorage`
 
@@ -372,11 +407,11 @@ Returns `{ valid: boolean; error?: string }`.
 
 ### `verifyAgentkitSignature(payload, options?)`
 
-Verifies the cryptographic signature and recovers the signer address. Routes to EVM or Solana verification based on the `chainId` prefix.
+Verifies the cryptographic signature and recovers the signer address. Routes to EVM or Solana verification based on the `chainId` prefix. EVM verification uses ERC-1271 (smart wallets) with ecrecover fallback (EOA) automatically.
 
-| Option        | Type                 | Description                                                 |
-| ------------- | -------------------- | ----------------------------------------------------------- |
-| `evmVerifier` | `EVMMessageVerifier` | Pass `publicClient.verifyMessage` for smart wallet support. |
+| Option   | Type     | Description                                                                                    |
+| -------- | -------- | ---------------------------------------------------------------------------------------------- |
+| `rpcUrl` | `string` | Custom RPC URL for EVM signature verification. Uses the chain's default public RPC if omitted. |
 
 Returns `{ valid: boolean; address?: string; error?: string }`.
 
@@ -396,7 +431,7 @@ Returns `{ valid: boolean; address?: string; error?: string }`.
 - **Nonce uniqueness**: A fresh nonce is generated per request to prevent replay attacks.
 - **Temporal bounds**: `issuedAt` must be recent (default: 5 minutes) and `expirationTime` must be in the future.
 - **Chain-specific verification**: Signatures are verified using chain-appropriate methods, preventing cross-chain reuse.
-- **Smart wallet support**: Requires RPC calls to the wallet contract. Without a verifier, only EOA signatures are checked.
+- **Smart wallet support**: EVM verification automatically supports both smart contract wallets (ERC-1271) and EOA wallets via RPC calls to the chain.
 - **On-chain verification**: AgentBook lookups happen at request time, so revoked registrations take effect immediately.
 - **Per-human tracking**: Usage limits are tracked by anonymous human identifier, not by wallet address. Multiple agents controlled by one person share a single counter.
 
@@ -406,7 +441,7 @@ Returns `{ valid: boolean; address?: string; error?: string }`.
 
 - Verify the client is signing with the correct wallet
 - Check the signature scheme matches (EIP-191 for EOA, EIP-1271 for smart wallets)
-- Enable `evmVerifier` if using smart wallets
+- If using a custom `rpcUrl`, ensure it points to the correct chain
 - Confirm the chain ID is consistent between client and server
 
 ### Message validation fails
@@ -419,6 +454,6 @@ Returns `{ valid: boolean; address?: string; error?: string }`.
 ### AgentBook lookup returns null
 
 - Verify the agent wallet has been registered in the AgentBook with a valid World ID proof
-- Check that `createAgentBookVerifier()` is configured for the correct chain
+- Check that `createAgentBookVerifier()` is configured for the correct lookup chain
 - Ensure the RPC endpoint is reachable
 - Confirm the contract address is correct for the target network

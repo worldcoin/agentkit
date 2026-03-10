@@ -1,8 +1,30 @@
 {
 	"name": "@worldcoin/agentkit",
-	"version": "0.0.1",
-	"type": "module",
-	"main": "src/index.ts",
+	"version": "0.1.0",
+	"main": "./dist/cjs/index.js",
+	"module": "./dist/esm/index.mjs",
+	"types": "./dist/cjs/index.d.ts",
+	"exports": {
+		".": {
+			"import": {
+				"types": "./dist/esm/index.d.mts",
+				"default": "./dist/esm/index.mjs"
+			},
+			"require": {
+				"types": "./dist/cjs/index.d.ts",
+				"default": "./dist/cjs/index.js"
+			}
+		}
+	},
+	"files": ["dist"],
+	"publishConfig": {
+		"access": "public"
+	},
+	"scripts": {
+		"build": "tsup",
+		"prepublishOnly": "bun run build",
+		"publish:npm": "npm publish"
+	},
 	"dependencies": {
 		"@scure/base": "^1.2.6",
 		"@x402/core": "^2.4.0",
@@ -10,5 +32,9 @@
 		"tweetnacl": "^1.0.3",
 		"viem": "^2.46.2",
 		"zod": "^3.24.2"
+	},
+	"devDependencies": {
+		"tsup": "^8.5.1",
+		"typescript": "^5.9.3"
 	}
 }
