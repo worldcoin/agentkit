@@ -104,16 +104,6 @@ export interface AgentkitVerifyResult {
 	error?: string
 }
 
-export type EVMMessageVerifier = (args: {
-	address: `0x${string}`
-	message: string
-	signature: `0x${string}`
-}) => Promise<boolean>
-
-export interface AgentkitVerifyOptions {
-	evmVerifier?: EVMMessageVerifier
-}
-
 export type CompleteAgentkitInfo = AgentkitExtensionInfo & {
 	chainId: string
 	type: SignatureType

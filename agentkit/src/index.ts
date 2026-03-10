@@ -16,8 +16,6 @@ export type {
 	AgentkitValidationResult,
 	AgentkitValidationOptions,
 	AgentkitVerifyResult,
-	EVMMessageVerifier,
-	AgentkitVerifyOptions,
 	SupportedChain,
 } from './types'
 

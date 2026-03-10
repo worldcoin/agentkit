@@ -83,7 +83,7 @@ import {
 	InMemoryAgentKitStorage,
 } from '@worldcoin/agentkit'
 
-const NETWORK = 'eip155:84532' // Base Sepolia
+const NETWORK = 'eip155:8453' // Base
 const payTo = '0xYourAddress'
 
 const agentBook = createAgentBookVerifier()
@@ -181,21 +181,15 @@ The client pays the discounted price. Payment verification fails (amount too low
 
 ### Smart Wallet Support (EIP-1271 / EIP-6492)
 
-To support contract wallets (Safe, Coinbase Smart Wallet, etc.), pass a viem public client's `verifyMessage` function:
+Signature verification automatically handles both smart contract wallets (ERC-1271) and EOA wallets (ecrecover). Smart wallets like Safe, Coinbase Smart Wallet, and CDP wallets work out of the box with no additional configuration. A public client is created internally from the chain ID to make the on-chain `isValidSignature` call when needed.
+
+To use a custom RPC endpoint instead of the chain's default public RPC:
 
 ```typescript
-import { baseSepolia } from 'viem/chains'
-import { createPublicClient, http } from 'viem'
-
-const publicClient = createPublicClient({
-	chain: baseSepolia,
-	transport: http(),
-})
-
 const hooks = createAgentkitHooks({
 	agentBook,
 	mode: { type: 'free' },
-	verifyOptions: { evmVerifier: publicClient.verifyMessage },
+	rpcUrl: 'https://your-rpc-endpoint.com',
 })
 ```
 
@@ -352,7 +346,7 @@ Creates hooks for `x402HTTPResourceServer` and optionally `x402ResourceServer`.
 | `agentBook`     | `AgentBookVerifier`                  | AgentBook verifier instance (required).                                |
 | `mode`          | `AgentkitMode`                       | Access mode (default: `{ type: "free" }`).                             |
 | `storage`       | `AgentKitStorage`                    | Storage for usage tracking (required for `free-trial` and `discount`). |
-| `verifyOptions` | `AgentkitVerifyOptions`              | Signature verification options (e.g., smart wallet support).           |
+| `rpcUrl`        | `string`                             | Custom RPC URL for EVM signature verification. Uses the chain's default public RPC if omitted. |
 | `onEvent`       | `(event: AgentkitHookEvent) => void` | Callback for logging/debugging.                                        |
 
 **Returns:**
@@ -413,11 +407,11 @@ Returns `{ valid: boolean; error?: string }`.
 
 ### `verifyAgentkitSignature(payload, options?)`
 
-Verifies the cryptographic signature and recovers the signer address. Routes to EVM or Solana verification based on the `chainId` prefix.
+Verifies the cryptographic signature and recovers the signer address. Routes to EVM or Solana verification based on the `chainId` prefix. EVM verification uses ERC-1271 (smart wallets) with ecrecover fallback (EOA) automatically.
 
-| Option        | Type                 | Description                                                 |
-| ------------- | -------------------- | ----------------------------------------------------------- |
-| `evmVerifier` | `EVMMessageVerifier` | Pass `publicClient.verifyMessage` for smart wallet support. |
+| Option   | Type     | Description                                                                                    |
+| -------- | -------- | ---------------------------------------------------------------------------------------------- |
+| `rpcUrl` | `string` | Custom RPC URL for EVM signature verification. Uses the chain's default public RPC if omitted. |
 
 Returns `{ valid: boolean; address?: string; error?: string }`.
 
@@ -437,7 +431,7 @@ Returns `{ valid: boolean; address?: string; error?: string }`.
 - **Nonce uniqueness**: A fresh nonce is generated per request to prevent replay attacks.
 - **Temporal bounds**: `issuedAt` must be recent (default: 5 minutes) and `expirationTime` must be in the future.
 - **Chain-specific verification**: Signatures are verified using chain-appropriate methods, preventing cross-chain reuse.
-- **Smart wallet support**: Requires RPC calls to the wallet contract. Without a verifier, only EOA signatures are checked.
+- **Smart wallet support**: EVM verification automatically supports both smart contract wallets (ERC-1271) and EOA wallets via RPC calls to the chain.
 - **On-chain verification**: AgentBook lookups happen at request time, so revoked registrations take effect immediately.
 - **Per-human tracking**: Usage limits are tracked by anonymous human identifier, not by wallet address. Multiple agents controlled by one person share a single counter.
 
@@ -447,7 +441,7 @@ Returns `{ valid: boolean; address?: string; error?: string }`.
 
 - Verify the client is signing with the correct wallet
 - Check the signature scheme matches (EIP-191 for EOA, EIP-1271 for smart wallets)
-- Enable `evmVerifier` if using smart wallets
+- If using a custom `rpcUrl`, ensure it points to the correct chain
 - Confirm the chain ID is consistent between client and server
 
 ### Message validation fails
