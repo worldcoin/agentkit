@@ -1,5 +1,6 @@
-import * as chains from 'viem/chains'
-import { createPublicClient, extractChain, http, toHex, type PublicClient } from 'viem'
+import { toHex, type PublicClient } from 'viem'
+import { extractEVMChainId } from './evm'
+import { getPublicClient } from './viem-client'
 
 /** Known AgentBook deployments keyed by CAIP-2 network identifier. */
 const KNOWN_DEPLOYMENTS: Record<string, `0x${string}`> = {
@@ -34,8 +35,6 @@ export interface AgentBookOptions {
 }
 
 export function createAgentBookVerifier(options: AgentBookOptions = {}) {
-	const clientCache = new Map<string, PublicClient>()
-
 	function resolveLookupChainId(chainId: string): string {
 		if (options.network === 'base') return BASE_MAINNET
 		if (options.network === 'base-sepolia') return BASE_SEPOLIA
@@ -54,28 +53,12 @@ export function createAgentBookVerifier(options: AgentBookOptions = {}) {
 
 		const lookupChainId = resolveLookupChainId(chainId)
 
-		let cached = clientCache.get(lookupChainId)
-		if (cached) return cached
-
 		const numericId =
 			options.contractAddress && options.rpcUrl && !options.network
-				? extractNumericChainId(chainId)
-				: extractNumericChainId(lookupChainId)
+				? extractEVMChainId(chainId)
+				: extractEVMChainId(lookupChainId)
 
-		let chain
-		if (options.rpcUrl) {
-			chain = { id: numericId } as chains.Chain
-		} else {
-			const allChains = Object.values(chains)
-			chain = extractChain({ chains: allChains, id: numericId as (typeof allChains)[number]['id'] })
-		}
-
-		cached = createPublicClient({
-			chain,
-			transport: http(options.rpcUrl),
-		}) as PublicClient
-		clientCache.set(lookupChainId, cached)
-		return cached
+		return getPublicClient(numericId, options.rpcUrl)
 	}
 
 	function getContractAddress(chainId: string): `0x${string}` {
@@ -123,9 +106,3 @@ export function createAgentBookVerifier(options: AgentBookOptions = {}) {
 }
 
 export type AgentBookVerifier = ReturnType<typeof createAgentBookVerifier>
-
-function extractNumericChainId(caip2: string): number {
-	const match = /^eip155:(\d+)$/.exec(caip2)
-	if (!match) throw new Error(`Unsupported chain format: ${caip2}`)
-	return parseInt(match[1], 10)
-}

@@ -1,11 +1,11 @@
 import { formatSIWEMessage, verifyEVMSignature } from './evm'
 import { formatSIWSMessage, verifySolanaSignature, decodeBase58 } from './solana'
-import type { AgentkitPayload, AgentkitVerifyResult, AgentkitVerifyOptions, EVMMessageVerifier } from './types'
+import type { AgentkitPayload, AgentkitVerifyResult } from './types'
 
-export async function verifyAgentkitSignature(payload: AgentkitPayload, options?: AgentkitVerifyOptions): Promise<AgentkitVerifyResult> {
+export async function verifyAgentkitSignature(payload: AgentkitPayload, rpcUrl?: string): Promise<AgentkitVerifyResult> {
 	try {
 		if (payload.chainId.startsWith('eip155:')) {
-			return verifyEVMPayload(payload, options?.evmVerifier)
+			return verifyEVMPayload(payload, rpcUrl)
 		}
 
 		if (payload.chainId.startsWith('solana:')) {
@@ -24,7 +24,7 @@ export async function verifyAgentkitSignature(payload: AgentkitPayload, options?
 	}
 }
 
-async function verifyEVMPayload(payload: AgentkitPayload, verifier?: EVMMessageVerifier): Promise<AgentkitVerifyResult> {
+async function verifyEVMPayload(payload: AgentkitPayload, rpcUrl?: string): Promise<AgentkitVerifyResult> {
 	const message = formatSIWEMessage(
 		{
 			domain: payload.domain,
@@ -44,7 +44,7 @@ async function verifyEVMPayload(payload: AgentkitPayload, verifier?: EVMMessageV
 	)
 
 	try {
-		const valid = await verifyEVMSignature(message, payload.address, payload.signature, verifier)
+		const valid = await verifyEVMSignature(message, payload.address, payload.signature, payload.chainId, rpcUrl)
 
 		if (!valid) {
 			return { valid: false, error: 'Signature verification failed' }

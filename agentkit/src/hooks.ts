@@ -4,7 +4,7 @@ import type { AgentKitStorage } from './storage'
 import { verifyAgentkitSignature } from './verify'
 import { validateAgentkitMessage } from './validate'
 import type { AgentBookVerifier } from './agent-book'
-import type { AgentkitMode, AgentkitVerifyOptions } from './types'
+import type { AgentkitMode } from './types'
 
 export type AgentkitHookEvent =
 	| { type: 'agent_verified'; resource: string; address: string; humanId: string }
@@ -17,12 +17,13 @@ export interface CreateAgentkitHooksOptions {
 	agentBook: AgentBookVerifier
 	mode?: AgentkitMode
 	storage?: AgentKitStorage
-	verifyOptions?: AgentkitVerifyOptions
+	/** Custom RPC URL for EVM signature verification. Uses the chain's default public RPC if omitted. */
+	rpcUrl?: string
 	onEvent?: (event: AgentkitHookEvent) => void
 }
 
 export function createAgentkitHooks(options: CreateAgentkitHooksOptions) {
-	const { agentBook, verifyOptions, onEvent } = options
+	const { agentBook, onEvent } = options
 	const mode: AgentkitMode = options.mode ?? { type: 'free' }
 	const storage = options.storage
 
@@ -60,7 +61,7 @@ export function createAgentkitHooks(options: CreateAgentkitHooksOptions) {
 				return
 			}
 
-			const verification = await verifyAgentkitSignature(payload, verifyOptions)
+			const verification = await verifyAgentkitSignature(payload, options.rpcUrl)
 			if (!verification.valid || !verification.address) {
 				onEvent?.({ type: 'validation_failed', resource: context.path, error: verification.error })
 				return
