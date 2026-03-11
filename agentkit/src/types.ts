@@ -4,7 +4,7 @@ export const AGENTKIT = 'agentkit'
 
 export type SignatureScheme = 'eip191' | 'eip1271' | 'eip6492' | 'siws'
 
-export type SignatureType = 'eip191' | 'ed25519'
+export type SignatureType = 'eip191' | 'eip1271' | 'ed25519'
 
 export interface SupportedChain {
 	chainId: string
@@ -60,7 +60,7 @@ export const AgentkitPayloadSchema = z.object({
 	uri: z.string(),
 	version: z.string(),
 	chainId: z.string(),
-	type: z.enum(['eip191', 'ed25519']),
+	type: z.enum(['eip191', 'eip1271', 'ed25519']),
 	nonce: z.string(),
 	issuedAt: z.string(),
 	expirationTime: z.string().optional(),
