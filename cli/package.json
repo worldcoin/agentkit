@@ -1,6 +1,6 @@
 {
   "name": "@worldcoin/agentkit-cli",
-  "version": "0.1.2",
+  "version": "0.1.3",
   "description": "Register agent wallets with World ID-verified humans via AgentBook.",
   "type": "module",
   "main": "dist/index.js",
