@@ -47,14 +47,18 @@ async function verifyEVMPayload(payload: AgentkitPayload, rpcUrl?: string): Prom
 		const valid = await verifyEVMSignature(message, payload.address, payload.signature, payload.chainId, rpcUrl)
 
 		if (!valid) {
-			return { valid: false, error: 'Signature verification failed' }
+			return {
+				valid: false,
+				error: `Signature verification failed. The signature does not match the reconstructed SIWE message. Ensure your agent signs exactly this message using EIP-191 (EOA) or ERC-1271 (smart wallet):\n\n${message}`,
+			}
 		}
 
 		return { valid: true, address: payload.address }
 	} catch (error) {
+		const reason = error instanceof Error ? error.message : 'Unknown error'
 		return {
 			valid: false,
-			error: error instanceof Error ? error.message : 'Signature verification failed',
+			error: `Signature verification error: ${reason}. The SIWE message the server reconstructed from your payload:\n\n${message}`,
 		}
 	}
 }
