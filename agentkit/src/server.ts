@@ -1,7 +1,7 @@
 import { AGENTKIT } from './types'
 import { randomBytes } from 'crypto'
 import { buildAgentkitSchema } from './schema'
-import { getSignatureType, type AgentkitDeclaration } from './declare'
+import { getSignatureTypes, type AgentkitDeclaration } from './declare'
 import type { ResourceServerExtension, PaymentRequiredContext } from '@x402/core/types'
 import type {
 	AgentkitExtension,
@@ -59,10 +59,12 @@ export const agentkitResourceServerExtension: ResourceServerExtension = {
 			info.statement = opts.statement
 		}
 
-		const supportedChains: SupportedChain[] = networks.map(network => ({
-			chainId: network,
-			type: getSignatureType(network),
-		}))
+		const supportedChains: SupportedChain[] = networks.flatMap(network =>
+			getSignatureTypes(network).map(type => ({
+				chainId: network,
+				type,
+			}))
+		)
 
 		return {
 			info,

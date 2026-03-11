@@ -8,8 +8,8 @@ import type {
 	SupportedChain,
 } from './types'
 
-export function getSignatureType(network: string): SignatureType {
-	return network.startsWith('solana:') ? 'ed25519' : 'eip191'
+export function getSignatureTypes(network: string): SignatureType[] {
+	return network.startsWith('solana:') ? ['ed25519'] : ['eip191', 'eip1271']
 }
 
 export interface AgentkitDeclaration extends AgentkitExtension {
@@ -35,10 +35,12 @@ export function declareAgentkitExtension(options: DeclareAgentkitOptions = {}): 
 	let supportedChains: SupportedChain[] = []
 	if (options.network) {
 		const networks = Array.isArray(options.network) ? options.network : [options.network]
-		supportedChains = networks.map(network => ({
-			chainId: network,
-			type: getSignatureType(network),
-		}))
+		supportedChains = networks.flatMap(network =>
+			getSignatureTypes(network).map(type => ({
+				chainId: network,
+				type,
+			}))
+		)
 	}
 
 	const declaration: AgentkitDeclaration = {
