@@ -111,7 +111,7 @@ cli.command('register', {
 		// 4. Print QR code and link
 		const connectorURI = worldID.getState().connectorURI!
 		if (c.agent) {
-			c.log(`HUMAN ACTION REQUIRED: Scan or click this link in World App to verify: ${connectorURI}`)
+			console.log(`HUMAN ACTION REQUIRED: Scan or click this link in World App to verify: ${connectorURI}`)
 		} else {
 			console.log()
 			console.log('Scan this QR code with World App or open the link:')
