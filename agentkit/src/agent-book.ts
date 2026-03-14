@@ -2,16 +2,19 @@ import { toHex, type PublicClient } from 'viem'
 import { extractEVMChainId } from './evm'
 import { getPublicClient } from './viem-client'
 
-/** Known AgentBook deployments keyed by CAIP-2 network identifier. */
-const KNOWN_DEPLOYMENTS: Record<string, `0x${string}`> = {
-	'eip155:8453': '0xE1D1D3526A6FAa37eb36bD10B933C1b77f4561a4',
-	'eip155:84532': '0xA23aB2712eA7BBa896930544C7d6636a96b944dA',
-}
-
+const WORLD_MAINNET = 'eip155:480'
 const BASE_MAINNET = 'eip155:8453'
 const BASE_SEPOLIA = 'eip155:84532'
 
-export type AgentBookNetwork = 'base' | 'base-sepolia'
+/** Known AgentBook deployments keyed by CAIP-2 network identifier. */
+const KNOWN_DEPLOYMENTS: Record<string, `0x${string}`> = {
+    WORLD_MAINNET: '0xA23aB2712eA7BBa896930544C7d6636a96b944dA',
+	BASE_MAINNET: '0xE1D1D3526A6FAa37eb36bD10B933C1b77f4561a4',
+	BASE_SEPOLIA: '0xA23aB2712eA7BBa896930544C7d6636a96b944dA',
+}
+
+
+export type AgentBookNetwork = 'world' | 'base' | 'base-sepolia'
 
 const AGENT_BOOK_ABI = [
 	{
@@ -37,15 +40,16 @@ export interface AgentBookOptions {
 export function createAgentBookVerifier(options: AgentBookOptions = {}) {
 	function resolveLookupChainId(chainId: string): string {
 		if (options.network === 'base') return BASE_MAINNET
+        if (options.network === 'world') return WORLD_MAINNET
 		if (options.network === 'base-sepolia') return BASE_SEPOLIA
 
-		if (chainId === BASE_MAINNET || chainId === BASE_SEPOLIA) {
+		if (chainId === WORLD_MAINNET || chainId === BASE_MAINNET || chainId === BASE_SEPOLIA) {
 			return chainId
 		}
 
-		// AgentBook is only deployed on Base mainnet and Base Sepolia.
-		// Default non-Base chains to Base mainnet unless explicitly pinned.
-		return BASE_MAINNET
+		// AgentBook is only deployed on WorldChain, Base mainnet and Base Sepolia.
+		// Default Worldchain mainnet unless explicitly pinned.
+		return WORLD_MAINNET
 	}
 
 	function getClient(chainId: string): PublicClient {

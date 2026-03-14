@@ -3,7 +3,7 @@ import './polyfill.js'
 import { Cli, z } from 'incur'
 import { createPublicClient, http, decodeAbiParameters } from 'viem'
 import type { Hex } from 'viem'
-import { base, baseSepolia } from 'viem/chains'
+import { base, baseSepolia, worldchain } from 'viem/chains'
 import { createWorldBridgeStore } from '@worldcoin/idkit-core'
 import type { ISuccessResult } from '@worldcoin/idkit-core'
 import { solidityEncode } from '@worldcoin/idkit-core/hashing'
@@ -13,6 +13,7 @@ import qrcode from 'qrcode-terminal'
 
 const NETWORKS = {
 	base: { chain: base, address: '0xE1D1D3526A6FAa37eb36bD10B933C1b77f4561a4' as const },
+    world: { chain: worldchain, address: '0xA23aB2712eA7BBa896930544C7d6636a96b944dA' as const},
 	'base-sepolia': { chain: baseSepolia, address: '0xA23aB2712eA7BBa896930544C7d6636a96b944dA' as const },
 } as const
 
@@ -47,7 +48,7 @@ cli.command('register', {
 		address: z.string().regex(/^0x[a-fA-F0-9]{40}$/, 'Invalid Ethereum address').describe('Agent wallet address'),
 	}),
 	options: z.object({
-		network: z.enum(NETWORK_NAMES).default('base').describe('Target network'),
+		network: z.enum(NETWORK_NAMES).default('world').describe('Target network'),
 		auto: z.boolean().default(true).describe('Submit registration to the default relay or API_URL override'),
 		manual: z.boolean().optional().describe('Print manual call data instead of submitting through a relay'),
 	}),
