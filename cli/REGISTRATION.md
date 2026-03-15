@@ -40,6 +40,7 @@ Current AgentBook deployments used by the CLI:
 
 - Base: `0xE1D1D3526A6FAa37eb36bD10B933C1b77f4561a4`
 - Base Sepolia: `0xA23aB2712eA7BBa896930544C7d6636a96b944dA`
+- Worldchain: `0xA23aB2712eA7BBa896930544C7d6636a96b944dA`
 
 ## Registration Flow
 
