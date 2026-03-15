@@ -34,7 +34,6 @@ const ACTION = 'agentbook-registration'
 const DEFAULT_AUTO_API_URLS: Record<keyof typeof NETWORKS, string> = {
 	base: 'https://x402-worldchain.vercel.app',
 	world: 'https://x402-worldchain.vercel.app',
-	'base-sepolia': 'https://x402-worldchain.vercel.app',
 }
 
 // ─── CLI ─────────────────────────────────────────────────────────────────────
