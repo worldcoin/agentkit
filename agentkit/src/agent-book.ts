@@ -2,15 +2,17 @@ import { toHex, type PublicClient } from 'viem'
 import { extractEVMChainId } from './evm'
 import { getPublicClient } from './viem-client'
 
-const WORLD_MAINNET = 'eip155:480'
-const BASE_MAINNET = 'eip155:8453'
-const BASE_SEPOLIA = 'eip155:84532'
+const WORLD_MAINNET = 'eip155:480' as const
+const BASE_MAINNET = 'eip155:8453' as const
+const BASE_SEPOLIA = 'eip155:84532' as const
+
+type KnownChainId = typeof WORLD_MAINNET | typeof BASE_MAINNET | typeof BASE_SEPOLIA
 
 /** Known AgentBook deployments keyed by CAIP-2 network identifier. */
-const KNOWN_DEPLOYMENTS: Record<string, `0x${string}`> = {
-    WORLD_MAINNET: '0xA23aB2712eA7BBa896930544C7d6636a96b944dA',
-	BASE_MAINNET: '0xE1D1D3526A6FAa37eb36bD10B933C1b77f4561a4',
-	BASE_SEPOLIA: '0xA23aB2712eA7BBa896930544C7d6636a96b944dA',
+const KNOWN_DEPLOYMENTS: Record<KnownChainId, `0x${string}`> = {
+	[WORLD_MAINNET]: '0xA23aB2712eA7BBa896930544C7d6636a96b944dA',
+	[BASE_MAINNET]: '0xE1D1D3526A6FAa37eb36bD10B933C1b77f4561a4',
+	[BASE_SEPOLIA]: '0xA23aB2712eA7BBa896930544C7d6636a96b944dA',
 }
 
 
@@ -38,9 +40,9 @@ export interface AgentBookOptions {
 }
 
 export function createAgentBookVerifier(options: AgentBookOptions = {}) {
-	function resolveLookupChainId(chainId: string): string {
+	function resolveLookupChainId(chainId: string): KnownChainId {
 		if (options.network === 'base') return BASE_MAINNET
-        if (options.network === 'world') return WORLD_MAINNET
+		if (options.network === 'world') return WORLD_MAINNET
 		if (options.network === 'base-sepolia') return BASE_SEPOLIA
 
 		if (chainId === WORLD_MAINNET || chainId === BASE_MAINNET || chainId === BASE_SEPOLIA) {
@@ -67,16 +69,7 @@ export function createAgentBookVerifier(options: AgentBookOptions = {}) {
 
 	function getContractAddress(chainId: string): `0x${string}` {
 		if (options.contractAddress) return options.contractAddress
-
-		const lookupChainId = resolveLookupChainId(chainId)
-		const address = KNOWN_DEPLOYMENTS[lookupChainId]
-		if (!address) {
-			throw new Error(
-				`No AgentBook deployment known for network ${lookupChainId}. ` +
-					`Pass a contractAddress to createAgentBookVerifier().`
-			)
-		}
-		return address
+		return KNOWN_DEPLOYMENTS[resolveLookupChainId(chainId)]
 	}
 
 	return {
