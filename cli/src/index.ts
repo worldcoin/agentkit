@@ -31,7 +31,7 @@ const AGENT_BOOK_ABI = [
 
 const APP_ID = 'app_a7c3e2b6b83927251a0db5345bd7146a'
 const ACTION = 'agentbook-registration'
-const DEFAULT_AUTO_API_URLS: Record<keyof typeof NETWORKS, string> = {
+const DEFAULT_AUTO_API_URLS: Partial<Record<keyof typeof NETWORKS, string>> = {
 	base: 'https://x402-worldchain.vercel.app',
 	world: 'https://x402-worldchain.vercel.app',
 }
