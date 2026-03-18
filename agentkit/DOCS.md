@@ -381,14 +381,13 @@ Returns an object with `lookupHuman(address: string, chainId: string): Promise<s
 
 Storage interface for tracking per-human usage counts.
 
-| Method                              | Description                                     |
-| ----------------------------------- | ----------------------------------------------- |
-| `getUsageCount(endpoint, humanId)`  | Get the usage count for a human on an endpoint. |
-| `incrementUsage(endpoint, humanId)` | Increment the usage count.                      |
-| `hasUsedNonce?(nonce)`              | Optional: check for replay attacks.             |
-| `recordNonce?(nonce)`               | Optional: record a used nonce.                  |
+| Method                                         | Description                                                                                                   |
+| ---------------------------------------------- | ------------------------------------------------------------------------------------------------------------- |
+| `tryIncrementUsage(endpoint, humanId, limit)`  | Atomically increment usage if below `limit`. Returns `true` if incremented, `false` if limit already reached. |
+| `hasUsedNonce?(nonce)`                         | Optional: check for replay attacks.                                                                           |
+| `recordNonce?(nonce)`                          | Optional: record a used nonce.                                                                                |
 
-`InMemoryAgentKitStorage` is the reference in-memory implementation. For production, implement `AgentKitStorage` with a persistent backend.
+`InMemoryAgentKitStorage` is the reference in-memory implementation. For production, implement `AgentKitStorage` with a persistent backend (e.g. using a database transaction with row-level locking).
 
 ### `parseAgentkitHeader(header)`
 
