@@ -35,6 +35,10 @@ export function createAgentkitHooks(options: CreateAgentkitHooksOptions) {
 		throw new Error(`Discount percent must be an integer between 1 and 100, got ${mode.percent}`)
 	}
 
+	if ((mode.type === 'free-trial' || mode.type === 'discount') && mode.uses !== undefined && (!Number.isFinite(mode.uses) || mode.uses < 1)) {
+		throw new Error(`Usage limit must be a finite number >= 1, got ${mode.uses}`)
+	}
+
 	// Shared state for discount mode: requestHook stores verified agent info
 	// for verifyFailureHook to use (it doesn't have HTTP header access).
 	const PENDING_TTL_MS = 5 * 60 * 1000
@@ -84,9 +88,7 @@ export function createAgentkitHooks(options: CreateAgentkitHooksOptions) {
 
 			if (mode.type === 'free-trial') {
 				const uses = mode.uses ?? 1
-				const count = await storage!.getUsageCount(context.path, humanId)
-				if (count < uses) {
-					await storage!.incrementUsage(context.path, humanId)
+				if (await storage!.tryIncrementUsage(context.path, humanId, uses)) {
 					onEvent?.({
 						type: 'agent_verified',
 						resource: context.path,
@@ -135,13 +137,6 @@ export function createAgentkitHooks(options: CreateAgentkitHooksOptions) {
 					if (!isUnderpaymentError(context.error)) return
 
 					const { humanId, address } = pending
-					const uses = mode.uses ?? Infinity
-					const count = await storage!.getUsageCount(resourcePath, humanId)
-
-					if (count >= uses) {
-						onEvent?.({ type: 'discount_exhausted', resource: resourcePath, address, humanId })
-						return
-					}
 
 					const requiredAmount = BigInt(context.requirements.amount)
 					const discountedAmount = (requiredAmount * BigInt(100 - mode.percent)) / 100n
@@ -151,7 +146,11 @@ export function createAgentkitHooks(options: CreateAgentkitHooksOptions) {
 					// If paid amount covers the full price, failure isn't about underpayment
 					if (paidAmount >= requiredAmount) return
 
-					await storage!.incrementUsage(resourcePath, humanId)
+					const uses = mode.uses ?? Infinity
+					if (!(await storage!.tryIncrementUsage(resourcePath, humanId, uses))) {
+						onEvent?.({ type: 'discount_exhausted', resource: resourcePath, address, humanId })
+						return
+					}
 					onEvent?.({ type: 'discount_applied', resource: resourcePath, address, humanId })
 
 					// Adjust requirements so settlement verifies against the discounted amount

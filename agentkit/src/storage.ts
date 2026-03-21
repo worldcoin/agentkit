@@ -1,6 +1,12 @@
 export interface AgentKitStorage {
-	getUsageCount(endpoint: string, humanId: string): Promise<number>
-	incrementUsage(endpoint: string, humanId: string): Promise<void>
+	/**
+	 * Atomically increment usage only if the current count is below the limit.
+	 * Returns `true` if the increment was performed, `false` if the limit was already reached.
+	 *
+	 * Implementations MUST perform the check and increment as a single atomic operation
+	 * (e.g. a database transaction with row-level locking) to prevent TOCTOU race conditions.
+	 */
+	tryIncrementUsage(endpoint: string, humanId: string, limit: number): Promise<boolean>
 
 	hasUsedNonce?(nonce: string): Promise<boolean>
 	recordNonce?(nonce: string): Promise<void>
@@ -10,13 +16,12 @@ export class InMemoryAgentKitStorage implements AgentKitStorage {
 	private usage = new Map<string, number>()
 	private nonces = new Set<string>()
 
-	async getUsageCount(endpoint: string, humanId: string): Promise<number> {
-		return this.usage.get(`${endpoint}:${humanId}`) ?? 0
-	}
-
-	async incrementUsage(endpoint: string, humanId: string): Promise<void> {
+	async tryIncrementUsage(endpoint: string, humanId: string, limit: number): Promise<boolean> {
 		const key = `${endpoint}:${humanId}`
-		this.usage.set(key, (this.usage.get(key) ?? 0) + 1)
+		const count = this.usage.get(key) ?? 0
+		if (count >= limit) return false
+		this.usage.set(key, count + 1)
+		return true
 	}
 
 	async hasUsedNonce(nonce: string): Promise<boolean> {
