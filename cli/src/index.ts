@@ -11,11 +11,7 @@ import qrcode from 'qrcode-terminal'
 
 // ─── Config ──────────────────────────────────────────────────────────────────
 
-const NETWORKS = {
-	world: { chain: worldchain, address: '0xA23aB2712eA7BBa896930544C7d6636a96b944dA' as const },
-} as const
-
-const NETWORK_NAMES = Object.keys(NETWORKS) as [keyof typeof NETWORKS, ...Array<keyof typeof NETWORKS>]
+const AGENT_BOOK_CONTRACT = '0xA23aB2712eA7BBa896930544C7d6636a96b944dA' as const
 
 const AGENT_BOOK_ABI = [
 	{
@@ -29,9 +25,7 @@ const AGENT_BOOK_ABI = [
 
 const APP_ID = 'app_a7c3e2b6b83927251a0db5345bd7146a'
 const ACTION = 'agentbook-registration'
-const DEFAULT_AUTO_API_URLS: Partial<Record<keyof typeof NETWORKS, string>> = {
-	world: 'https://x402-worldchain.vercel.app',
-}
+const DEFAULT_API_URL = 'https://x402-worldchain.vercel.app'
 
 // ─── CLI ─────────────────────────────────────────────────────────────────────
 
@@ -46,11 +40,10 @@ cli.command('register', {
 		address: z.string().regex(/^0x[a-fA-F0-9]{40}$/, 'Invalid Ethereum address').describe('Agent wallet address'),
 	}),
 	options: z.object({
-		network: z.enum(NETWORK_NAMES).default('world').describe('Target network'),
 		auto: z.boolean().default(true).describe('Submit registration to the default relay or API_URL override'),
 		manual: z.boolean().optional().describe('Print manual call data instead of submitting through a relay'),
 	}),
-	alias: { network: 'n', auto: 'a', manual: 'm' },
+	alias: { auto: 'a', manual: 'm' },
 	env: z.object({
 		API_URL: z
 			.string()
@@ -64,7 +57,6 @@ cli.command('register', {
 		nullifierHash: z.string(),
 		proof: z.array(z.string()),
 		contract: z.string(),
-		network: z.string(),
 		txHash: z.string().optional(),
 	}),
 	examples: [
@@ -72,15 +64,14 @@ cli.command('register', {
 	],
 	async run(c) {
 		const agentAddress = c.args.address as `0x${string}`
-		const deployment = NETWORKS[c.options.network]
 		const shouldAuto = c.options.manual ? false : c.options.auto
 
 		// 1. Read next nonce from AgentBook contract
 		if (!c.agent) console.log(`Looking up next nonce for ${agentAddress}...`)
 
-		const client = createPublicClient({ chain: deployment.chain, transport: http() })
+		const client = createPublicClient({ chain: worldchain, transport: http() })
 		const nonce = await client.readContract({
-			address: deployment.address,
+			address: AGENT_BOOK_CONTRACT,
 			abi: AGENT_BOOK_ABI,
 			functionName: 'getNextNonce',
 			args: [agentAddress],
@@ -142,8 +133,7 @@ cli.command('register', {
 			nonce: nonce.toString(),
 			nullifierHash: completion.proof.nullifier_hash,
 			proof,
-			contract: deployment.address,
-			network: c.options.network,
+			contract: AGENT_BOOK_CONTRACT,
 		}
 
 		if (!shouldAuto) {
@@ -151,7 +141,7 @@ cli.command('register', {
 				console.log()
 				console.log('Submit this transaction on-chain:')
 				console.log()
-				console.log(`Contract: ${deployment.address}`)
+				console.log(`Contract: ${AGENT_BOOK_CONTRACT}`)
 				console.log(
 					'Function: register(address agent, uint256 root, uint256 nonce, uint256 nullifierHash, uint256[8] proof)'
 				)
@@ -160,13 +150,7 @@ cli.command('register', {
 			return registration
 		}
 
-		const apiUrl = c.env.API_URL ?? DEFAULT_AUTO_API_URLS[c.options.network]
-		if (!apiUrl) {
-			return c.error({
-				code: 'MISSING_API_URL',
-				message: `No default registration relay is configured for network ${c.options.network}. Set API_URL to use --auto on this network.`,
-			})
-		}
+		const apiUrl = c.env.API_URL ?? DEFAULT_API_URL
 
 		const registerUrl = `${apiUrl.replace(/\/$/, '')}/register`
 
