@@ -6,8 +6,6 @@ const WORLD_MAINNET = 'eip155:480' as const
 
 const AGENT_BOOK_ADDRESS: `0x${string}` = '0xA23aB2712eA7BBa896930544C7d6636a96b944dA'
 
-export type AgentBookNetwork = 'world'
-
 const AGENT_BOOK_ABI = [
 	{
 		inputs: [{ internalType: 'address', name: '', type: 'address' }],
@@ -21,26 +19,20 @@ const AGENT_BOOK_ABI = [
 export interface AgentBookOptions {
 	/** Custom viem PublicClient. Overrides automatic client creation. */
 	client?: PublicClient
-	/** Custom contract address. Overrides the built-in network → address mapping. */
+	/** Custom contract address. Overrides the built-in World Chain deployment. */
 	contractAddress?: `0x${string}`
 	/** Custom RPC URL. Defaults to the chain's default RPC. */
 	rpcUrl?: string
-	/** Pin lookup to the built-in World Chain AgentBook deployment. */
-	network?: AgentBookNetwork
 }
 
 export function createAgentBookVerifier(options: AgentBookOptions = {}) {
-	function resolveLookupChainId(): typeof WORLD_MAINNET {
-		return WORLD_MAINNET
-	}
-
 	function getClient(chainId: string): PublicClient {
 		if (options.client) return options.client
 
 		const numericId =
-			options.contractAddress && options.rpcUrl && !options.network
+			options.contractAddress && options.rpcUrl
 				? extractEVMChainId(chainId)
-				: extractEVMChainId(resolveLookupChainId())
+				: extractEVMChainId(WORLD_MAINNET)
 
 		return getPublicClient(numericId, options.rpcUrl)
 	}
