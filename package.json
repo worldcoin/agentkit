@@ -7,8 +7,11 @@
 		"typescript": "^5.8.3"
 	},
 	"scripts": {
-		"build:agentkit": "bun run --cwd agentkit build",
-		"publish:agentkit": "npm publish --workspace @worldcoin/agentkit"
+		"build:core": "bun run --cwd core build",
+		"build:x402": "bun run --cwd x402 build",
+		"build": "bun run build:core && bun run build:x402",
+		"publish:core": "bun run --cwd core publish:npm",
+		"publish:x402": "bun run --cwd x402 publish:npm"
 	},
 	"prettier": {
 		"parser": "@typescript-eslint/parser",
@@ -26,6 +29,7 @@
 	},
 	"private": true,
 	"workspaces": [
-		"agentkit"
+		"core",
+		"x402"
 	]
 }

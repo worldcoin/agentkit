@@ -1,15 +1,13 @@
-import { AGENTKIT } from './types'
+import { AGENTKIT, buildAgentkitSchema } from '@worldcoin/agentkit-core'
 import { randomBytes } from 'crypto'
-import { buildAgentkitSchema } from './schema'
 import { getSignatureTypes, type AgentkitDeclaration } from './declare'
 import type { ResourceServerExtension, PaymentRequiredContext } from '@x402/core/types'
 import type {
 	AgentkitExtension,
 	AgentkitExtensionInfo,
-	AgentkitMode,
 	SupportedChain,
-	DeclareAgentkitOptions,
-} from './types'
+} from '@worldcoin/agentkit-core'
+import type { DeclareAgentkitOptions } from './types'
 
 export const agentkitResourceServerExtension: ResourceServerExtension = {
 	key: AGENTKIT,

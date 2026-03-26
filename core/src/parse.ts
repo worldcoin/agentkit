@@ -1,12 +1,13 @@
+import { base64 } from '@scure/base'
 import { AgentkitPayloadSchema, type AgentkitPayload } from './types'
-import { Base64EncodedRegex, safeBase64Decode } from '@x402/core/utils'
 
 export function parseAgentkitHeader(header: string): AgentkitPayload {
-	if (!Base64EncodedRegex.test(header)) {
+	let jsonStr: string
+	try {
+		jsonStr = new TextDecoder().decode(base64.decode(header))
+	} catch {
 		throw new Error('Invalid agentkit header: not valid base64')
 	}
-
-	const jsonStr = safeBase64Decode(header)
 
 	let rawPayload: unknown
 	try {

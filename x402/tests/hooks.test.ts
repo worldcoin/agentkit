@@ -1,9 +1,9 @@
 import nacl from 'tweetnacl'
 import { describe, expect, it } from 'bun:test'
 import { createAgentkitHooks } from '../src/hooks'
-import type { AgentkitPayload } from '../src/types'
+import type { AgentkitPayload } from '@worldcoin/agentkit-core'
 import type { AgentKitStorage } from '../src/storage'
-import { SOLANA_MAINNET, encodeBase58, formatSIWSMessage } from '../src/solana'
+import { SOLANA_MAINNET, encodeBase58, formatSIWSMessage } from '@worldcoin/agentkit-core'
 
 function createSignedRequest(url = 'https://agentkit.example/protected') {
 	const keyPair = nacl.sign.keyPair()

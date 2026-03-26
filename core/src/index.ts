@@ -7,10 +7,8 @@ export type {
 	AgentkitExtension,
 	AgentkitExtensionInfo,
 	AgentkitExtensionSchema,
-	AgentkitMode,
 	AgentkitPayload,
 	CompleteAgentkitInfo,
-	DeclareAgentkitOptions,
 	SignatureScheme,
 	SignatureType,
 	AgentkitValidationResult,
@@ -19,9 +17,7 @@ export type {
 	SupportedChain,
 } from './types'
 
-// Server
-export { declareAgentkitExtension } from './declare'
-export { agentkitResourceServerExtension } from './server'
+// Verification
 export { parseAgentkitHeader } from './parse'
 export { validateAgentkitMessage } from './validate'
 export { verifyAgentkitSignature } from './verify'
@@ -41,9 +37,3 @@ export {
 
 // AgentBook
 export { createAgentBookVerifier, type AgentBookVerifier, type AgentBookOptions } from './agent-book'
-
-// Storage
-export { InMemoryAgentKitStorage, type AgentKitStorage } from './storage'
-
-// Hooks
-export { createAgentkitHooks, type CreateAgentkitHooksOptions, type AgentkitHookEvent } from './hooks'

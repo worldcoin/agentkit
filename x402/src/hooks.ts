@@ -1,9 +1,6 @@
-import { AGENTKIT } from './types'
-import { parseAgentkitHeader } from './parse'
+import { AGENTKIT, parseAgentkitHeader, verifyAgentkitSignature, validateAgentkitMessage } from '@worldcoin/agentkit-core'
+import type { AgentBookVerifier } from '@worldcoin/agentkit-core'
 import type { AgentKitStorage } from './storage'
-import { verifyAgentkitSignature } from './verify'
-import { validateAgentkitMessage } from './validate'
-import type { AgentBookVerifier } from './agent-book'
 import type { AgentkitMode } from './types'
 
 export type AgentkitHookEvent =

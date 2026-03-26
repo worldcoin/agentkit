@@ -1,12 +1,11 @@
-import { AGENTKIT } from './types'
-import { buildAgentkitSchema } from './schema'
+import { AGENTKIT, buildAgentkitSchema } from '@worldcoin/agentkit-core'
 import type {
 	AgentkitExtension,
 	AgentkitExtensionInfo,
-	DeclareAgentkitOptions,
 	SignatureType,
 	SupportedChain,
-} from './types'
+} from '@worldcoin/agentkit-core'
+import type { DeclareAgentkitOptions } from './types'
 
 export function getSignatureTypes(network: string): SignatureType[] {
 	return network.startsWith('solana:') ? ['ed25519'] : ['eip191', 'eip1271']

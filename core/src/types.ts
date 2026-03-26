@@ -73,21 +73,6 @@ export const AgentkitPayloadSchema = z.object({
 
 export type AgentkitPayload = z.infer<typeof AgentkitPayloadSchema>
 
-export type AgentkitMode =
-	| { type: 'free' }
-	| { type: 'free-trial'; uses?: number }
-	| { type: 'discount'; percent: number; uses?: number }
-
-export interface DeclareAgentkitOptions {
-	domain?: string
-	resourceUri?: string
-	statement?: string
-	version?: string
-	network?: string | string[]
-	expirationSeconds?: number
-	mode?: AgentkitMode
-}
-
 export interface AgentkitValidationResult {
 	valid: boolean
 	error?: string
