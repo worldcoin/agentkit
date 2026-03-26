@@ -24,25 +24,13 @@ describe('createAgentBookVerifier', () => {
 		expect(calls).toEqual([{ address: '0xA23aB2712eA7BBa896930544C7d6636a96b944dA' }])
 	})
 
-	it('uses Base Sepolia when the request chain is Base Sepolia', async () => {
+	it('defaults to World Chain for unknown chains', async () => {
 		const calls: Array<{ address: string }> = []
 		const verifier = createAgentBookVerifier({
 			client: createMockClient(1n, calls),
 		})
 
 		await verifier.lookupHuman('0x1234567890abcdef1234567890abcdef12345678', 'eip155:84532')
-
-		expect(calls).toEqual([{ address: '0xA23aB2712eA7BBa896930544C7d6636a96b944dA' }])
-	})
-
-	it('allows pinning lookup to Base Sepolia explicitly', async () => {
-		const calls: Array<{ address: string }> = []
-		const verifier = createAgentBookVerifier({
-			client: createMockClient(1n, calls),
-			network: 'base-sepolia',
-		})
-
-		await verifier.lookupHuman('0x1234567890abcdef1234567890abcdef12345678', 'eip155:480')
 
 		expect(calls).toEqual([{ address: '0xA23aB2712eA7BBa896930544C7d6636a96b944dA' }])
 	})
