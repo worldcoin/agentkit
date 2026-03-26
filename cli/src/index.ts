@@ -3,7 +3,7 @@ import './polyfill.js'
 import { Cli, z } from 'incur'
 import { createPublicClient, http, decodeAbiParameters } from 'viem'
 import type { Hex } from 'viem'
-import { base, baseSepolia, worldchain } from 'viem/chains'
+import { worldchain } from 'viem/chains'
 import { createWorldBridgeStore } from '@worldcoin/idkit-core'
 import type { ISuccessResult } from '@worldcoin/idkit-core'
 import { solidityEncode } from '@worldcoin/idkit-core/hashing'
@@ -12,9 +12,7 @@ import qrcode from 'qrcode-terminal'
 // ─── Config ──────────────────────────────────────────────────────────────────
 
 const NETWORKS = {
-	base: { chain: base, address: '0xE1D1D3526A6FAa37eb36bD10B933C1b77f4561a4' as const },
-    world: { chain: worldchain, address: '0xA23aB2712eA7BBa896930544C7d6636a96b944dA' as const},
-	'base-sepolia': { chain: baseSepolia, address: '0xA23aB2712eA7BBa896930544C7d6636a96b944dA' as const },
+	world: { chain: worldchain, address: '0xA23aB2712eA7BBa896930544C7d6636a96b944dA' as const },
 } as const
 
 const NETWORK_NAMES = Object.keys(NETWORKS) as [keyof typeof NETWORKS, ...Array<keyof typeof NETWORKS>]
@@ -32,7 +30,6 @@ const AGENT_BOOK_ABI = [
 const APP_ID = 'app_a7c3e2b6b83927251a0db5345bd7146a'
 const ACTION = 'agentbook-registration'
 const DEFAULT_AUTO_API_URLS: Partial<Record<keyof typeof NETWORKS, string>> = {
-	base: 'https://x402-worldchain.vercel.app',
 	world: 'https://x402-worldchain.vercel.app',
 }
 
@@ -58,7 +55,7 @@ cli.command('register', {
 		API_URL: z
 			.string()
 			.optional()
-			.describe('Override API base URL for registration relay; base mainnet defaults to https://x402-worldchain.vercel.app'),
+			.describe('Override API base URL for registration relay; defaults to https://x402-worldchain.vercel.app'),
 	}),
 	output: z.object({
 		agent: z.string(),
@@ -71,12 +68,7 @@ cli.command('register', {
 		txHash: z.string().optional(),
 	}),
 	examples: [
-		{ args: { address: '0x1234567890abcdef1234567890abcdef12345678' }, description: 'Register on Base mainnet' },
-		{
-			args: { address: '0x1234567890abcdef1234567890abcdef12345678' },
-			options: { network: 'base-sepolia' },
-			description: 'Register on Sepolia',
-		},
+		{ args: { address: '0x1234567890abcdef1234567890abcdef12345678' }, description: 'Register on World Chain' },
 	],
 	async run(c) {
 		const agentAddress = c.args.address as `0x${string}`
