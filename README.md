@@ -4,28 +4,19 @@
 
 **Verify that an agent is backed by a real, [World ID-verified human](https://docs.world.org/agents/agent-kit).**
 
-![AgentKit Registration](registration.gif)
+<img src="registration.gif" alt="AgentKit Registration" width="960" />
 
 </div>
 
-## Install
-
-### With Claude
-
-Install the AgentKit plugin for Claude Code:
-
+## Skills
+For your Agent to use your registration when accessing x402 endpoints
 ```bash
-claude plugin install agentkit
+npx skills add worldcoin/agentkit agentkit-x402 
 ```
 
-This gives you two skills:
-
-- `/agentkit:agentkit-x402` — how to authenticate with x402 endpoints as a human-backed agent
-- `/agentkit:integrate-agentkit` — server-side integration guide
-
-### Via Skills
+For developers building x402 servers, add the integration guide to your knowledge base:
 ```bash
-npx skills add worldcoin/agentkit agentkit-x402
+npx skills add worldcoin/agentkit integrate-agentkit
 ```
 
 ## How it Works
