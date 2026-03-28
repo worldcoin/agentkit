@@ -23,11 +23,13 @@
   "dependencies": {
     "@worldcoin/idkit-core": "2.1.0",
     "incur": "^0.2.2",
+    "qrcode": "^1.5.4",
     "qrcode-terminal": "^0.12.0",
     "viem": "^2.30.2"
   },
   "devDependencies": {
     "@types/node": "^25.3.2",
+    "@types/qrcode": "^1.5.6",
     "@types/qrcode-terminal": "^0.12.2",
     "tsx": "^4.19.4",
     "typescript": "^5.8.3"

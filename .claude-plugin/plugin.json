@@ -1,0 +1,10 @@
+{
+  "name": "agentkit",
+  "version": "0.1.6",
+  "description": "Skills for registering and using AgentKit — prove your agent is backed by a real human to get free or discounted access to x402 endpoints.",
+  "author": {
+    "name": "Worldcoin"
+  },
+  "repository": "https://github.com/worldcoin/agentkit",
+  "license": "MIT"
+}

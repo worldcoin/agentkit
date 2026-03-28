@@ -1,6 +1,21 @@
-# Agent Kit
+<div align="center">
 
-Verify that an agent is backed by a real, World ID-verified human.
+```
+    _                    _   _  ___ _
+   / \   __ _  ___ _ __ | |_| |/ (_) |_
+  / _ \ / _` |/ _ \ '_ \| __| ' /| | __|
+ / ___ \ (_| |  __/ | | | |_| . \| | |_
+/_/   \_\__, |\___|_| |_|\__|_|\_\_|\__|
+        |___/
+```
+
+**Verify that an agent is backed by a real, World ID-verified human.**
+
+[Docs](https://docs.world.org/agents/agent-kit)
+
+<video src="registration.mp4" width="600" autoplay loop muted></video>
+
+</div>
 
 ## What It Does
 
@@ -9,6 +24,26 @@ Verify that an agent is backed by a real, World ID-verified human.
 3. The server verifies the signature, resolves the registering human from AgentBook, and applies the configured access policy.
 
 This lets applications distinguish between arbitrary automation and automation acting on behalf of a real human, without exposing the human's underlying identity.
+
+## Install
+
+### With Claude
+
+Install the AgentKit plugin for Claude Code:
+
+```bash
+claude plugin install agentkit
+```
+
+This gives you two skills:
+
+- `/agentkit:agentkit-x402` — how to authenticate with x402 endpoints as a human-backed agent
+- `/agentkit:integrate-agentkit` — server-side integration guide
+
+### Via Skills
+```bash
+npx skills add worldcoin/agentkit agentki-x402
+```
 
 ## For Agents
 
