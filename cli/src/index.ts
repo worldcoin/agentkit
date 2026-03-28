@@ -7,7 +7,7 @@ import { worldchain } from 'viem/chains'
 import { createWorldBridgeStore } from '@worldcoin/idkit-core'
 import type { ISuccessResult } from '@worldcoin/idkit-core'
 import { solidityEncode } from '@worldcoin/idkit-core/hashing'
-import QRCode from 'qrcode'
+import qrcode from 'qrcode-terminal'
 
 // ─── Config ──────────────────────────────────────────────────────────────────
 
@@ -99,15 +99,8 @@ cli.command('register', {
 		if (c.agent) {
 			console.log(`HUMAN ACTION REQUIRED: Scan or click this link in World App to verify: ${connectorURI}`)
 		} else {
-			const qr = await QRCode.toString(connectorURI, {
-				type: 'utf8',
-				errorCorrectionLevel: 'L',
-				margin: 2,
-			})
+			qrcode.generate(connectorURI, { small: true })
 			console.log()
-			console.log('  Scan with World App to verify:')
-			console.log()
-			console.log(qr)
 			console.log(`  ${connectorURI}`)
 			console.log()
 			console.log('  Waiting for verification...')
