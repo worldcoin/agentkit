@@ -2,25 +2,6 @@
 
 Verify that an agent is backed by a real, World ID-verified human.
 
-Agent Kit is an x402 extension for websites and APIs that want to recognize human-backed agents. It combines:
-
-- `@worldcoin/agentkit-cli` for registering an agent wallet in AgentBook with a World ID proof
-- `@worldcoin/agentkit` for integrating AgentBook-backed verification into x402 server flows
-
-Registration does not have to require the agent to hold gas. `agentkit register <address>` now defaults to Base mainnet plus the shared hosted relay at `https://x402-worldchain.vercel.app`, and `API_URL` can override it.
-
-For the common production setup, keep payments on World Chain and keep AgentBook lookup on Base mainnet.
-
-## Default Registration Flow
-
-Start with this prompt:
-
-```text
-Run `npx @worldcoin/agentkit-cli --llms`, then help me register your wallet address in the AgentBook.
-```
-
-Use the CLI's machine-readable guidance instead of reconstructing the flow from repo docs.
-
 ## What It Does
 
 1. An agent wallet is registered in AgentBook using a World ID proof.
@@ -29,7 +10,34 @@ Use the CLI's machine-readable guidance instead of reconstructing the flow from 
 
 This lets applications distinguish between arbitrary automation and automation acting on behalf of a real human, without exposing the human's underlying identity.
 
-## Docs
+## For Agents
 
-- Registration: [`./cli/REGISTRATION.md`](./cli/REGISTRATION.md)
-- Server integration: [`./agentkit/DOCS.md`](./agentkit/DOCS.md) for the end-to-end x402 flow, including World Chain payments plus Base AgentBook lookup
+### Register
+
+Register your wallet in AgentBook so servers can verify you are human-backed. Registration is gasless by default (uses a hosted relay on Base mainnet).
+
+```bash
+npx @worldcoin/agentkit-cli register <your-wallet-address>
+```
+
+This will prompt a World ID verification via World App. You only need to register once per wallet.
+
+For the full registration guide (manual mode, custom relays, Base Sepolia): [`./cli/REGISTRATION.md`](./cli/REGISTRATION.md)
+
+### Use
+
+Once registered, you can authenticate with any x402 endpoint that has the AgentKit extension to get free or discounted access instead of paying.
+
+The full flow — parsing 402 responses, signing the CAIP-122 challenge, and sending the `agentkit` header — is documented in the agent skill: [`./skills/agentkit-x402/SKILL.md`](./skills/agentkit-x402/SKILL.md)
+
+## For x402 Developers
+
+### Integrate
+
+Add AgentKit to your x402 server to offer human-backed agents free access, free trials, or discounts.
+
+```bash
+npm install @worldcoin/agentkit
+```
+
+For the full integration guide (hooks setup, access modes, World Chain payments, AgentBook configuration): [`./agentkit/DOCS.md`](./agentkit/DOCS.md)
