@@ -50,6 +50,7 @@ cli.command('register', {
 			.optional()
 			.describe('Override API base URL for registration relay; defaults to https://x402-worldchain.vercel.app'),
 	}),
+	outputPolicy: 'agent-only',
 	output: z.object({
 		agent: z.string(),
 		root: z.string(),
@@ -179,17 +180,26 @@ cli.command('register', {
 		const result = (await response.json()) as { txHash?: string }
 
 		if (!c.agent) {
+			const lines = [
+				'',
+				'\x1b[32m\x1b[1m✓ Agent registered on World Chain\x1b[0m',
+				'',
+				`Agent  \x1b[36m${agentAddress}\x1b[0m`,
+				...(result.txHash ? [`Tx     \x1b[90m${result.txHash}\x1b[0m`] : []),
+				'',
+			]
+
+			// Measure visible width (strip ANSI codes)
+			const strip = (s: string) => s.replace(/\x1b\[[0-9;]*m/g, '')
+			const maxWidth = Math.max(...lines.map(l => strip(l).length))
+			const pad = (s: string) => s + ' '.repeat(maxWidth - strip(s).length)
+
 			console.log()
-			console.log('  ┌─────────────────────────────────────────────┐')
-			console.log('  │                                             │')
-			console.log('  │   \x1b[32m\x1b[1m✓ Agent registered on World Chain\x1b[0m        │')
-			console.log('  │                                             │')
-			console.log(`  │   Agent:  \x1b[36m${agentAddress}\x1b[0m   │`)
-			if (result.txHash) {
-				console.log(`  │   Tx:     \x1b[90m${result.txHash}\x1b[0m   │`)
+			console.log(`  ┌${'─'.repeat(maxWidth + 6)}┐`)
+			for (const line of lines) {
+				console.log(`  │   ${pad(line)}   │`)
 			}
-			console.log('  │                                             │')
-			console.log('  └─────────────────────────────────────────────┘')
+			console.log(`  └${'─'.repeat(maxWidth + 6)}┘`)
 			console.log()
 		}
 
