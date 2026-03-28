@@ -1,19 +1,12 @@
 <div align="center">
 
-```
-    _                    _   _  ___ _
-   / \   __ _  ___ _ __ | |_| |/ (_) |_
-  / _ \ / _` |/ _ \ '_ \| __| ' /| | __|
- / ___ \ (_| |  __/ | | | |_| . \| | |_
-/_/   \_\__, |\___|_| |_|\__|_|\_\_|\__|
-        |___/
-```
+# **AgentKit**
 
 **Verify that an agent is backed by a real, World ID-verified human.**
 
 [Docs](https://docs.world.org/agents/agent-kit)
 
-<video src="registration.mp4" width="600" autoplay loop muted></video>
+![AgentKit Registration](registration.gif)
 
 </div>
 
@@ -42,7 +35,7 @@ This gives you two skills:
 
 ### Via Skills
 ```bash
-npx skills add worldcoin/agentkit agentki-x402
+npx skills add worldcoin/agentkit agentkit-x402
 ```
 
 ## For Agents

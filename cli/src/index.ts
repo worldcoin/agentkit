@@ -7,7 +7,7 @@ import { worldchain } from 'viem/chains'
 import { createWorldBridgeStore } from '@worldcoin/idkit-core'
 import type { ISuccessResult } from '@worldcoin/idkit-core'
 import { solidityEncode } from '@worldcoin/idkit-core/hashing'
-import qrcode from 'qrcode-terminal'
+import QRCode from 'qrcode'
 
 // ─── Config ──────────────────────────────────────────────────────────────────
 
@@ -67,7 +67,7 @@ cli.command('register', {
 		const shouldAuto = c.options.manual ? false : c.options.auto
 
 		// 1. Read next nonce from AgentBook contract
-		if (!c.agent) console.log(`Looking up next nonce for ${agentAddress}...`)
+		if (!c.agent) console.log(`  Looking up next nonce for ${agentAddress}...`)
 
 		const client = createPublicClient({ chain: worldchain, transport: http() })
 		const nonce = await client.readContract({
@@ -98,14 +98,19 @@ cli.command('register', {
 		if (c.agent) {
 			console.log(`HUMAN ACTION REQUIRED: Scan or click this link in World App to verify: ${connectorURI}`)
 		} else {
+			const qr = await QRCode.toString(connectorURI, {
+				type: 'utf8',
+				errorCorrectionLevel: 'L',
+				margin: 1,
+				width: 40,
+			})
 			console.log()
-			console.log('Scan this QR code with World App or open the link:')
+			console.log('  Scan with World App to verify:')
 			console.log()
-			qrcode.generate(connectorURI, { small: true })
-			console.log()
+			console.log(qr)
 			console.log(`  ${connectorURI}`)
 			console.log()
-			console.log('Waiting for verification...')
+			console.log('  Waiting for verification...')
 		}
 
 		// 5. Poll until completion
@@ -116,9 +121,10 @@ cli.command('register', {
 		}
 
 		if (!c.agent) {
-			console.log('Verification successful!')
-			console.log(`Merkle root:     ${completion.proof.merkle_root}`)
-			console.log(`Nullifier hash:  ${completion.proof.nullifier_hash}`)
+			console.log()
+			console.log('  \x1b[32m\x1b[1m✓ World ID verified\x1b[0m')
+			console.log(`  Merkle root:     ${completion.proof.merkle_root}`)
+			console.log(`  Nullifier hash:  ${completion.proof.nullifier_hash}`)
 		}
 
 		const proof = normalizeProof(completion.proof)
@@ -172,7 +178,20 @@ cli.command('register', {
 
 		const result = (await response.json()) as { txHash?: string }
 
-		if (!c.agent) console.log('Registration complete!')
+		if (!c.agent) {
+			console.log()
+			console.log('  ┌─────────────────────────────────────────────┐')
+			console.log('  │                                             │')
+			console.log('  │   \x1b[32m\x1b[1m✓ Agent registered on World Chain\x1b[0m        │')
+			console.log('  │                                             │')
+			console.log(`  │   Agent:  \x1b[36m${agentAddress}\x1b[0m   │`)
+			if (result.txHash) {
+			console.log(`  │   Tx:     \x1b[90m${result.txHash}\x1b[0m   │`)
+			}
+			console.log('  │                                             │')
+			console.log('  └─────────────────────────────────────────────┘')
+			console.log()
+		}
 
 		return { ...registration, txHash: result.txHash }
 	},
