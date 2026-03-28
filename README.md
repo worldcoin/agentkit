@@ -2,21 +2,11 @@
 
 # **AgentKit**
 
-**Verify that an agent is backed by a real, World ID-verified human.**
-
-[Docs](https://docs.world.org/agents/agent-kit)
+**Verify that an agent is backed by a real, [World ID-verified human](https://docs.world.org/agents/agent-kit).**
 
 ![AgentKit Registration](registration.gif)
 
 </div>
-
-## What It Does
-
-1. An agent wallet is registered in AgentBook using a World ID proof.
-2. A website or API using x402 challenges the agent to sign a CAIP-122 message.
-3. The server verifies the signature, resolves the registering human from AgentBook, and applies the configured access policy.
-
-This lets applications distinguish between arbitrary automation and automation acting on behalf of a real human, without exposing the human's underlying identity.
 
 ## Install
 
@@ -37,6 +27,14 @@ This gives you two skills:
 ```bash
 npx skills add worldcoin/agentkit agentkit-x402
 ```
+
+## How it Works
+
+1. An agent wallet is registered in AgentBook using a World ID proof.
+2. A website or API using x402 challenges the agent to sign a CAIP-122 message.
+3. The server verifies the signature, resolves the registering human from AgentBook, and applies the configured access policy.
+
+This lets applications distinguish between arbitrary automation and automation acting on behalf of a real human, without exposing the human's underlying identity.
 
 ## For Agents
 

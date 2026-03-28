@@ -77,7 +77,7 @@ cli.command('register', {
 			args: [agentAddress],
 		})
 
-		if (!c.agent) console.log(`Next nonce: ${nonce}`)
+		if (!c.agent) console.log(`  Nonce: ${nonce}`)
 
 		// 2. Build the signal payload
 		const signal = solidityEncode(['address', 'uint256'], [agentAddress, nonce])
@@ -85,7 +85,7 @@ cli.command('register', {
 		// 3. Create World ID verification request
 		const worldID = createWorldBridgeStore()
 
-		if (!c.agent) console.log('Creating World ID verification request...')
+		if (!c.agent) console.log('  Creating World ID verification request...')
 
 		await worldID.getState().createClient({
 			app_id: APP_ID,
@@ -101,8 +101,7 @@ cli.command('register', {
 			const qr = await QRCode.toString(connectorURI, {
 				type: 'utf8',
 				errorCorrectionLevel: 'L',
-				margin: 1,
-				width: 40,
+				margin: 2,
 			})
 			console.log()
 			console.log('  Scan with World App to verify:')
@@ -145,11 +144,11 @@ cli.command('register', {
 		if (!shouldAuto) {
 			if (!c.agent) {
 				console.log()
-				console.log('Submit this transaction on-chain:')
+				console.log('  Submit this transaction on-chain:')
 				console.log()
-				console.log(`Contract: ${AGENT_BOOK_CONTRACT}`)
+				console.log(`  Contract: ${AGENT_BOOK_CONTRACT}`)
 				console.log(
-					'Function: register(address agent, uint256 root, uint256 nonce, uint256 nullifierHash, uint256[8] proof)'
+					'  Function: register(address agent, uint256 root, uint256 nonce, uint256 nullifierHash, uint256[8] proof)'
 				)
 			}
 
@@ -161,8 +160,9 @@ cli.command('register', {
 		const registerUrl = `${apiUrl.replace(/\/$/, '')}/register`
 
 		if (!c.agent) {
-			console.log(`\nRegistering agent ${agentAddress}...`)
-			console.log(`Relay: ${apiUrl}`)
+			console.log()
+			console.log(`  Registering agent ${agentAddress}...`)
+			console.log(`  Relay: \x1b[90m${apiUrl}\x1b[0m`)
 		}
 
 		const response = await fetch(registerUrl, {
@@ -186,7 +186,7 @@ cli.command('register', {
 			console.log('  │                                             │')
 			console.log(`  │   Agent:  \x1b[36m${agentAddress}\x1b[0m   │`)
 			if (result.txHash) {
-			console.log(`  │   Tx:     \x1b[90m${result.txHash}\x1b[0m   │`)
+				console.log(`  │   Tx:     \x1b[90m${result.txHash}\x1b[0m   │`)
 			}
 			console.log('  │                                             │')
 			console.log('  └─────────────────────────────────────────────┘')
