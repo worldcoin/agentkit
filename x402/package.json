@@ -22,19 +22,17 @@
 	},
 	"scripts": {
 		"build": "tsup",
-		"prepublishOnly": "bun run build",
-		"publish:npm": "npm publish"
+		"prepublishOnly": "bun run --cwd ../core build && bun run build",
+		"publish:npm": "bun publish"
 	},
 	"dependencies": {
-		"@scure/base": "^1.2.6",
-		"@x402/core": "^2.4.0",
-		"siwe": "^2.3.2",
-		"tweetnacl": "^1.0.3",
-		"viem": "^2.46.2",
-		"zod": "^3.24.2"
+		"@worldcoin/agentkit-core": "workspace:^",
+		"@x402/core": "^2.4.0"
 	},
 	"devDependencies": {
+		"@types/node": "^25.5.0",
 		"tsup": "^8.5.1",
+		"tweetnacl": "^1.0.3",
 		"typescript": "^5.9.3"
 	}
 }
