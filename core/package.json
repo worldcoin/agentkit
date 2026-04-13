@@ -1,6 +1,11 @@
 {
 	"name": "@worldcoin/agentkit-core",
 	"version": "0.1.7",
+	"repository": {
+		"type": "git",
+		"url": "https://github.com/worldcoin/agentkit.git",
+		"directory": "core"
+	},
 	"main": "./dist/cjs/index.js",
 	"module": "./dist/esm/index.mjs",
 	"types": "./dist/cjs/index.d.ts",
