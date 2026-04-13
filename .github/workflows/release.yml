@@ -36,6 +36,34 @@ jobs:
       - name: Install Dependencies
         run: bun install
 
+      - name: Diagnose publish auth environment
+        run: |
+          echo "::group::npm binary and version"
+          which npm
+          npm --version
+          echo "::endgroup::"
+          echo "::group::OIDC env var presence"
+          if [ -n "$ACTIONS_ID_TOKEN_REQUEST_URL" ]; then echo "ACTIONS_ID_TOKEN_REQUEST_URL: set"; else echo "ACTIONS_ID_TOKEN_REQUEST_URL: MISSING"; fi
+          if [ -n "$ACTIONS_ID_TOKEN_REQUEST_TOKEN" ]; then echo "ACTIONS_ID_TOKEN_REQUEST_TOKEN: set"; else echo "ACTIONS_ID_TOKEN_REQUEST_TOKEN: MISSING"; fi
+          echo "::endgroup::"
+          echo "::group::.npmrc files on disk"
+          for f in "$HOME/.npmrc" "/etc/npmrc" "./.npmrc" "./core/.npmrc" "./x402/.npmrc" "./cli/.npmrc"; do
+            if [ -f "$f" ]; then
+              echo "--- $f ---"
+              cat "$f"
+            fi
+          done
+          echo "(end)"
+          echo "::endgroup::"
+          echo "::group::npm config (authToken-related only)"
+          npm config list --location=user 2>&1 || true
+          npm config get registry
+          npm config get //registry.npmjs.org/:_authToken 2>&1 || true
+          echo "::endgroup::"
+          echo "::group::npm whoami (expected to attempt OIDC if trusted publishing wired)"
+          npm whoami --registry=https://registry.npmjs.org/ 2>&1 || echo "(whoami failed — expected if no classic token is set)"
+          echo "::endgroup::"
+
       - name: Create Release Pull Request or Publish to npm
         id: changesets
         uses: changesets/action@e0145edc7d9d8679003495b11f87bd8ef63c0cba # v1.5.3 (https://github.com/changesets/action/releases/tag/v1.5.3)
