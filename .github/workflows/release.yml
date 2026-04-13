@@ -25,6 +25,11 @@ jobs:
         with:
           node-version: 24.x
 
+      - name: Upgrade npm to a version with OIDC trusted publishing support
+        run: |
+          npm install -g npm@latest
+          npm --version
+
       - name: Setup Bun
         uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0 (https://github.com/oven-sh/setup-bun/releases/tag/v2.2.0)
 
