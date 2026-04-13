@@ -12,37 +12,37 @@ function createMockClient(result: bigint, calls: Array<{ address: string }>): Pu
 }
 
 describe('createAgentBookVerifier', () => {
-	it('uses the World Chain AgentBook when the request chain is World Chain', async () => {
+	it('looks up addresses against the World Chain AgentBook', async () => {
 		const calls: Array<{ address: string }> = []
 		const verifier = createAgentBookVerifier({
 			client: createMockClient(1n, calls),
 		})
 
-		const humanId = await verifier.lookupHuman('0x1234567890abcdef1234567890abcdef12345678', 'eip155:480')
+		const humanId = await verifier.lookupHuman('0x1234567890abcdef1234567890abcdef12345678')
 
 		expect(humanId).toBe('0x1')
 		expect(calls).toEqual([{ address: '0xA23aB2712eA7BBa896930544C7d6636a96b944dA' }])
 	})
 
-	it('defaults to World Chain for unknown chains', async () => {
+	it('returns null for unregistered addresses', async () => {
 		const calls: Array<{ address: string }> = []
 		const verifier = createAgentBookVerifier({
-			client: createMockClient(1n, calls),
+			client: createMockClient(0n, calls),
 		})
 
-		await verifier.lookupHuman('0x1234567890abcdef1234567890abcdef12345678', 'eip155:84532')
+		const humanId = await verifier.lookupHuman('0x1234567890abcdef1234567890abcdef12345678')
 
-		expect(calls).toEqual([{ address: '0xA23aB2712eA7BBa896930544C7d6636a96b944dA' }])
+		expect(humanId).toBeNull()
 	})
 
-	it('still honors custom contract deployments', async () => {
+	it('honors custom contract deployments', async () => {
 		const calls: Array<{ address: string }> = []
 		const verifier = createAgentBookVerifier({
 			client: createMockClient(1n, calls),
 			contractAddress: '0x9999999999999999999999999999999999999999',
 		})
 
-		await verifier.lookupHuman('0x1234567890abcdef1234567890abcdef12345678', 'eip155:480')
+		await verifier.lookupHuman('0x1234567890abcdef1234567890abcdef12345678')
 
 		expect(calls).toEqual([{ address: '0x9999999999999999999999999999999999999999' }])
 	})

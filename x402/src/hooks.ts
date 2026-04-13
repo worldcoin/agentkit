@@ -1,7 +1,7 @@
-import { AGENTKIT, parseAgentkitHeader, verifyAgentkitSignature, validateAgentkitMessage } from '@worldcoin/agentkit-core'
-import type { AgentBookVerifier } from '@worldcoin/agentkit-core'
-import type { AgentKitStorage } from './storage'
 import type { AgentkitMode } from './types'
+import type { AgentKitStorage } from './storage'
+import type { AgentBookVerifier } from '@worldcoin/agentkit-core'
+import { AGENTKIT, parseAgentkitHeader, verifyAgentkitSignature, validateAgentkitMessage } from '@worldcoin/agentkit-core'
 
 export type AgentkitHookEvent =
 	| { type: 'agent_verified'; resource: string; address: string; humanId: string }
@@ -32,7 +32,11 @@ export function createAgentkitHooks(options: CreateAgentkitHooksOptions) {
 		throw new Error(`Discount percent must be an integer between 1 and 100, got ${mode.percent}`)
 	}
 
-	if ((mode.type === 'free-trial' || mode.type === 'discount') && mode.uses !== undefined && (!Number.isFinite(mode.uses) || mode.uses < 1)) {
+	if (
+		(mode.type === 'free-trial' || mode.type === 'discount') &&
+		mode.uses !== undefined &&
+		(!Number.isFinite(mode.uses) || mode.uses < 1)
+	) {
 		throw new Error(`Usage limit must be a finite number >= 1, got ${mode.uses}`)
 	}
 
@@ -72,7 +76,7 @@ export function createAgentkitHooks(options: CreateAgentkitHooksOptions) {
 				await storage.recordNonce(payload.nonce)
 			}
 
-			const humanId = await agentBook.lookupHuman(verification.address, payload.chainId)
+			const humanId = await agentBook.lookupHuman(verification.address)
 			if (!humanId) {
 				onEvent?.({ type: 'agent_not_verified', resource: context.path, address: verification.address })
 				return
@@ -104,7 +108,11 @@ export function createAgentkitHooks(options: CreateAgentkitHooksOptions) {
 				for (const [key, entry] of pendingDiscounts) {
 					if (now - entry.createdAt > PENDING_TTL_MS) pendingDiscounts.delete(key)
 				}
-				pendingDiscounts.set(`${context.path}:${verification.address}`, { humanId, address: verification.address, createdAt: now })
+				pendingDiscounts.set(`${context.path}:${verification.address}`, {
+					humanId,
+					address: verification.address,
+					createdAt: now,
+				})
 				// Don't grant access — agent is expected to pay (at a discount)
 				return
 			}
@@ -177,11 +185,7 @@ function extractPayer(payload: Record<string, unknown>): string | null {
 	}
 }
 
-const UNDERPAYMENT_REASONS = [
-	'invalid_exact_evm_payload_authorization_value',
-	'permit2_insufficient_amount',
-	'insufficient_funds',
-]
+const UNDERPAYMENT_REASONS = ['invalid_exact_evm_payload_authorization_value', 'permit2_insufficient_amount', 'insufficient_funds']
 
 function isUnderpaymentError(error: Error): boolean {
 	const reason = error.message.split(':')[0]

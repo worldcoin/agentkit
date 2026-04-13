@@ -1,8 +1,6 @@
 import { toHex, type PublicClient } from 'viem'
-import { extractEVMChainId } from './evm'
+import { worldchain } from 'viem/chains'
 import { getPublicClient } from './viem-client'
-
-const WORLD_MAINNET = 'eip155:480' as const
 
 const AGENT_BOOK_ADDRESS: `0x${string}` = '0xA23aB2712eA7BBa896930544C7d6636a96b944dA'
 
@@ -17,42 +15,24 @@ const AGENT_BOOK_ABI = [
 ] as const
 
 export interface AgentBookOptions {
-	/** Custom viem PublicClient. Overrides automatic client creation. */
+	/** Custom viem PublicClient. Advanced override for testing or custom deployments. */
 	client?: PublicClient
-	/** Custom contract address. Overrides the built-in World Chain deployment. */
+	/** Custom AgentBook contract address on World Chain. Defaults to the canonical deployment. */
 	contractAddress?: `0x${string}`
-	/** Custom RPC URL. Defaults to the chain's default RPC. */
+	/** Custom World Chain RPC URL. Defaults to the chain's default public RPC. */
 	rpcUrl?: string
 }
 
 export function createAgentBookVerifier(options: AgentBookOptions = {}) {
-	function getClient(chainId: string): PublicClient {
-		if (options.client) return options.client
-
-		const numericId =
-			options.contractAddress && options.rpcUrl
-				? extractEVMChainId(chainId)
-				: extractEVMChainId(WORLD_MAINNET)
-
-		return getPublicClient(numericId, options.rpcUrl)
-	}
-
-	function getContractAddress(): `0x${string}` {
-		if (options.contractAddress) return options.contractAddress
-		return AGENT_BOOK_ADDRESS
-	}
-
 	return {
 		/**
 		 * Look up the anonymous human identifier for an agent's wallet address.
-		 * @param address The agent's wallet address.
-		 * @param chainId CAIP-2 chain identifier (e.g. "eip155:480"). Lookup always
-		 *   resolves to the World Chain AgentBook deployment.
-		 * @returns The human ID (hex string) if registered, or null.
+		 * Always resolves against the AgentBook deployment on World Chain, regardless
+		 * of which chain the agent's signature was produced on.
 		 */
-		async lookupHuman(address: string, chainId: string): Promise<string | null> {
-			const contractAddress = getContractAddress()
-			const client = getClient(chainId)
+		async lookupHuman(address: string): Promise<string | null> {
+			const contractAddress = options.contractAddress ?? AGENT_BOOK_ADDRESS
+			const client = options.client ?? getPublicClient(worldchain.id, options.rpcUrl)
 
 			try {
 				const humanId = await client.readContract({

@@ -21,9 +21,7 @@
 		"access": "public"
 	},
 	"scripts": {
-		"build": "tsup",
-		"prepublishOnly": "bun run build",
-		"publish:npm": "bun publish"
+		"build": "tsup"
 	},
 	"dependencies": {
 		"@scure/base": "^1.2.6",
