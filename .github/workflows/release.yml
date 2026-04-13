@@ -10,12 +10,14 @@ concurrency: ${{ github.workflow }}-${{ github.ref }}
 permissions:
   contents: write
   pull-requests: write
+  attestations: write
   id-token: write
 
 jobs:
   release:
     name: Release
     runs-on: ubuntu-latest
+    environment: production
     steps:
       - name: Checkout Repo
         uses: actions/checkout@1af3b93b6815bc44a9784bd300feb67ff0d1eeb3 # v6.0.0 (https://github.com/actions/checkout/releases/tag/v6.0.0)
@@ -24,45 +26,13 @@ jobs:
         uses: actions/setup-node@2028fbc5c25fe9cf00d9f06a71cc4710d4507903 # v6.0.0 (https://github.com/actions/setup-node/releases/tag/v6.0.0)
         with:
           node-version: 24.x
-
-      - name: Upgrade npm to a version with OIDC trusted publishing support
-        run: |
-          npm install -g npm@latest
-          npm --version
+          registry-url: 'https://registry.npmjs.org/'
 
       - name: Setup Bun
         uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0 (https://github.com/oven-sh/setup-bun/releases/tag/v2.2.0)
 
       - name: Install Dependencies
         run: bun install
-
-      - name: Diagnose publish auth environment
-        run: |
-          echo "::group::npm binary and version"
-          which npm
-          npm --version
-          echo "::endgroup::"
-          echo "::group::OIDC env var presence"
-          if [ -n "$ACTIONS_ID_TOKEN_REQUEST_URL" ]; then echo "ACTIONS_ID_TOKEN_REQUEST_URL: set"; else echo "ACTIONS_ID_TOKEN_REQUEST_URL: MISSING"; fi
-          if [ -n "$ACTIONS_ID_TOKEN_REQUEST_TOKEN" ]; then echo "ACTIONS_ID_TOKEN_REQUEST_TOKEN: set"; else echo "ACTIONS_ID_TOKEN_REQUEST_TOKEN: MISSING"; fi
-          echo "::endgroup::"
-          echo "::group::.npmrc files on disk"
-          for f in "$HOME/.npmrc" "/etc/npmrc" "./.npmrc" "./core/.npmrc" "./x402/.npmrc" "./cli/.npmrc"; do
-            if [ -f "$f" ]; then
-              echo "--- $f ---"
-              cat "$f"
-            fi
-          done
-          echo "(end)"
-          echo "::endgroup::"
-          echo "::group::npm config (authToken-related only)"
-          npm config list --location=user 2>&1 || true
-          npm config get registry
-          npm config get //registry.npmjs.org/:_authToken 2>&1 || true
-          echo "::endgroup::"
-          echo "::group::npm whoami (expected to attempt OIDC if trusted publishing wired)"
-          npm whoami --registry=https://registry.npmjs.org/ 2>&1 || echo "(whoami failed — expected if no classic token is set)"
-          echo "::endgroup::"
 
       - name: Create Release Pull Request or Publish to npm
         id: changesets
