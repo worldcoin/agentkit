@@ -16,8 +16,6 @@
   },
   "scripts": {
     "build": "tsc",
-    "prepublishOnly": "bun run build",
-    "publish:npm": "npm publish",
     "cli": "tsx src/index.ts"
   },
   "dependencies": {

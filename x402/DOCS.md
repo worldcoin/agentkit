@@ -137,7 +137,7 @@ app.get('/data', c => {
 serve({ fetch: app.fetch, port: 4021 })
 ```
 
-If your paid route runs on World Chain (`eip155:480`), add a custom `registerMoneyParser(...)` for World Chain USDC on `ExactEvmScheme`. AgentBook lookup only uses the built-in Base mainnet and Base Sepolia deployments: Base Sepolia requests use Base Sepolia, and all other built-in lookups default to Base mainnet.
+If your paid route runs on World Chain (`eip155:480`), add a custom `registerMoneyParser(...)` for World Chain USDC on `ExactEvmScheme`. AgentBook lookup always resolves against the canonical World Chain deployment — your paid route can run on any EVM chain, but the registry check happens on World Chain.
 
 ### Mode Examples
 
@@ -195,33 +195,29 @@ const hooks = createAgentkitHooks({
 
 ### Custom AgentBook Configuration
 
-`createAgentBookVerifier()` has a built-in mapping of known AgentBook deployments. Today that mapping covers Base mainnet and Base Sepolia only. By default, Base Sepolia requests use the Base Sepolia deployment and all other built-in lookups use Base mainnet. Use `network` to pin lookup explicitly, or pass a custom client/address for a custom deployment:
+`createAgentBookVerifier()` always resolves against the canonical AgentBook deployment on World Chain (`eip155:480`). You do not need to pass a chain ID — the registry lives on one chain and lookup happens there regardless of which chain the agent signed on or which chain your paid route runs on. The caller side stays fully chain‑agnostic.
 
 ```typescript
-// Uses known deployments — no config needed for supported chains
+// Default — queries the canonical AgentBook on World Chain
 const agentBook = createAgentBookVerifier()
 
-// Force Base Sepolia even if the request is signed on another chain
+// Use a custom World Chain RPC endpoint
 const agentBook = createAgentBookVerifier({
-	network: 'base-sepolia',
+	rpcUrl: 'https://your-world-chain-rpc.example',
 })
 
-// Custom deployment (e.g., local Anvil)
+// Point at a custom contract (e.g. staging/testnet), still on World Chain RPC
 const agentBook = createAgentBookVerifier({
 	contractAddress: '0xYourCustomContract',
-	rpcUrl: 'http://localhost:8545',
 })
 
-// Or provide a fully custom viem client
-import { base } from 'viem/chains'
+// Advanced: inject a fully custom viem client (useful for tests or non-standard setups)
+import { worldchain } from 'viem/chains'
 import { createPublicClient, http } from 'viem'
 
 const agentBook = createAgentBookVerifier({
-	client: createPublicClient({ chain: base, transport: http() }),
+	client: createPublicClient({ chain: worldchain, transport: http() }),
 })
-
-// World Chain payments + Base AgentBook lookup (default built-in behavior)
-const agentBook = createAgentBookVerifier()
 ```
 
 ### Manual Usage (Advanced)
@@ -265,8 +261,8 @@ async function handleRequest(request: Request) {
 		return { error: verification.error }
 	}
 
-	// Look up the human behind this agent
-	const humanId = await agentBook.lookupHuman(verification.address!, payload.chainId)
+	// Look up the human behind this agent (always resolves against World Chain AgentBook)
+	const humanId = await agentBook.lookupHuman(verification.address!)
 	if (!humanId) {
 		return { error: 'Agent is not registered in the AgentBook' }
 	}
@@ -341,13 +337,13 @@ Configures the extension for 402 responses. Most parameters are auto-derived fro
 
 Creates hooks for `x402HTTPResourceServer` and optionally `x402ResourceServer`.
 
-| Option          | Type                                 | Description                                                            |
-| --------------- | ------------------------------------ | ---------------------------------------------------------------------- |
-| `agentBook`     | `AgentBookVerifier`                  | AgentBook verifier instance (required).                                |
-| `mode`          | `AgentkitMode`                       | Access mode (default: `{ type: "free" }`).                             |
-| `storage`       | `AgentKitStorage`                    | Storage for usage tracking (required for `free-trial` and `discount`). |
-| `rpcUrl`        | `string`                             | Custom RPC URL for EVM signature verification. Uses the chain's default public RPC if omitted. |
-| `onEvent`       | `(event: AgentkitHookEvent) => void` | Callback for logging/debugging.                                        |
+| Option      | Type                                 | Description                                                                                    |
+| ----------- | ------------------------------------ | ---------------------------------------------------------------------------------------------- |
+| `agentBook` | `AgentBookVerifier`                  | AgentBook verifier instance (required).                                                        |
+| `mode`      | `AgentkitMode`                       | Access mode (default: `{ type: "free" }`).                                                     |
+| `storage`   | `AgentKitStorage`                    | Storage for usage tracking (required for `free-trial` and `discount`).                         |
+| `rpcUrl`    | `string`                             | Custom RPC URL for EVM signature verification. Uses the chain's default public RPC if omitted. |
+| `onEvent`   | `(event: AgentkitHookEvent) => void` | Callback for logging/debugging.                                                                |
 
 **Returns:**
 
@@ -366,26 +362,25 @@ Creates hooks for `x402HTTPResourceServer` and optionally `x402ResourceServer`.
 
 ### `createAgentBookVerifier(options?)`
 
-Creates a verifier that looks up agent wallet addresses in the AgentBook contract. Built-in lookup only targets the Base mainnet and Base Sepolia AgentBook deployments. Base Sepolia requests use Base Sepolia; all other built-in lookups use Base mainnet. Custom clients and custom contract addresses still override this behavior.
+Creates a verifier that looks up agent wallet addresses in the canonical AgentBook contract on World Chain (`eip155:480`). Lookup always resolves against World Chain — the verifier is chain‑agnostic from the caller's perspective, regardless of which chain the agent's signature was produced on or which chain your paid route runs on.
 
-| Option            | Type                | Description                                                                            |
-| ----------------- | ------------------- | -------------------------------------------------------------------------------------- |
-| `network`         | `"base" \| "base-sepolia"` | Pin built-in lookup to Base mainnet or Base Sepolia.                             |
-| `client`          | `PublicClient`      | Custom viem public client. Overrides automatic client creation.                        |
-| `contractAddress` | `` `0x${string}` `` | Custom contract address. Overrides the built-in network→address mapping.               |
-| `rpcUrl`          | `string`            | Custom RPC URL. Used when creating clients automatically (ignored if `client` is set). |
+| Option            | Type                | Description                                                                                                  |
+| ----------------- | ------------------- | ------------------------------------------------------------------------------------------------------------ |
+| `rpcUrl`          | `string`            | Custom World Chain RPC URL. Defaults to the chain's default public RPC. Ignored if `client` is provided.     |
+| `contractAddress` | `` `0x${string}` `` | Custom AgentBook contract address on World Chain. Defaults to the canonical deployment.                      |
+| `client`          | `PublicClient`      | Advanced override — inject a fully custom viem public client (useful for tests or non-standard deployments). |
 
-Returns an object with `lookupHuman(address: string, chainId: string): Promise<string | null>`. The `chainId` is a CAIP-2 identifier (for example, `"eip155:480"` or `"eip155:84532"`). It is used to choose between Base mainnet and Base Sepolia for built-in lookup unless `network`, `client`, or `contractAddress` overrides that behavior. Returns the anonymous human identifier (hex string) or `null` if the agent is not registered.
+Returns an object with `lookupHuman(address: string): Promise<string | null>`. Returns the anonymous human identifier (hex string) or `null` if the agent is not registered.
 
 ### `AgentKitStorage` / `InMemoryAgentKitStorage`
 
 Storage interface for tracking per-human usage counts.
 
-| Method                                         | Description                                                                                                   |
-| ---------------------------------------------- | ------------------------------------------------------------------------------------------------------------- |
-| `tryIncrementUsage(endpoint, humanId, limit)`  | Atomically increment usage if below `limit`. Returns `true` if incremented, `false` if limit already reached. |
-| `hasUsedNonce?(nonce)`                         | Optional: check for replay attacks.                                                                           |
-| `recordNonce?(nonce)`                          | Optional: record a used nonce.                                                                                |
+| Method                                        | Description                                                                                                   |
+| --------------------------------------------- | ------------------------------------------------------------------------------------------------------------- |
+| `tryIncrementUsage(endpoint, humanId, limit)` | Atomically increment usage if below `limit`. Returns `true` if incremented, `false` if limit already reached. |
+| `hasUsedNonce?(nonce)`                        | Optional: check for replay attacks.                                                                           |
+| `recordNonce?(nonce)`                         | Optional: record a used nonce.                                                                                |
 
 `InMemoryAgentKitStorage` is the reference in-memory implementation. For production, implement `AgentKitStorage` with a persistent backend (e.g. using a database transaction with row-level locking).
 
@@ -453,6 +448,5 @@ Returns `{ valid: boolean; address?: string; error?: string }`.
 ### AgentBook lookup returns null
 
 - Verify the agent wallet has been registered in the AgentBook with a valid World ID proof
-- Check that `createAgentBookVerifier()` is configured for the correct lookup chain
-- Ensure the RPC endpoint is reachable
-- Confirm the contract address is correct for the target network
+- Ensure the World Chain RPC endpoint is reachable (or your custom `rpcUrl` if one was provided)
+- If you overrode `contractAddress`, confirm the deployment you're pointing at is the one holding your registration

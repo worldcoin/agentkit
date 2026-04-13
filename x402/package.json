@@ -21,9 +21,7 @@
 		"access": "public"
 	},
 	"scripts": {
-		"build": "tsup",
-		"prepublishOnly": "bun run --cwd ../core build && bun run build",
-		"publish:npm": "bun publish"
+		"build": "tsup"
 	},
 	"dependencies": {
 		"@worldcoin/agentkit-core": "workspace:^",

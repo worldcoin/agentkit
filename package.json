@@ -1,6 +1,7 @@
 {
 	"name": "x402-agentkit-poc",
 	"devDependencies": {
+		"@changesets/cli": "^2.30.0",
 		"@typescript-eslint/parser": "^8.56.1",
 		"prettier": "^3.8.1",
 		"prettier-plugin-sort-imports-desc": "^1.0.0",
@@ -9,9 +10,10 @@
 	"scripts": {
 		"build:core": "bun run --cwd core build",
 		"build:x402": "bun run --cwd x402 build",
-		"build": "bun run build:core && bun run build:x402",
-		"publish:core": "bun run --cwd core publish:npm",
-		"publish:x402": "bun run --cwd x402 publish:npm"
+		"build:cli": "bun run --cwd cli build",
+		"build": "bun run build:core && bun run build:x402 && bun run build:cli",
+		"changeset": "changeset",
+		"release": "bun run build && changeset publish"
 	},
 	"prettier": {
 		"parser": "@typescript-eslint/parser",
@@ -30,6 +32,7 @@
 	"private": true,
 	"workspaces": [
 		"core",
-		"x402"
+		"x402",
+		"cli"
 	]
 }
