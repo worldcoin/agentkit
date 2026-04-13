@@ -1,6 +1,6 @@
 ---
-'@worldcoin/agentkit-core': minor
-'@worldcoin/agentkit': minor
+'@worldcoin/agentkit-core': patch
+'@worldcoin/agentkit': patch
 ---
 
 Make AgentBook lookup chain-agnostic from the caller side.
@@ -9,10 +9,8 @@ Make AgentBook lookup chain-agnostic from the caller side.
 deployment on World Chain (`eip155:480`), regardless of which chain the agent's
 signature was produced on or which chain your paid route runs on.
 
-**Breaking change (0.x minor):** `lookupHuman(address)` no longer takes a
-`chainId` parameter. The previous signature ignored `chainId` in the default
-path anyway, but the type change will require updating call sites.
-
-The `AgentBookOptions` shape is unchanged — `rpcUrl`, `contractAddress`, and
-`client` still work, but their semantics are now "custom World Chain RPC" and
-"custom AgentBook contract on World Chain" rather than chain-switching knobs.
+`lookupHuman(address)` no longer takes a `chainId` parameter — the argument was
+already ignored in the default path, so the call site cleanup is the only
+change integrators need to make. `AgentBookOptions` is unchanged; `rpcUrl` and
+`contractAddress` still work, now with "custom World Chain RPC" and "custom
+AgentBook contract on World Chain" semantics.
