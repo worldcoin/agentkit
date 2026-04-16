@@ -31,7 +31,7 @@
 		"build": "tsup"
 	},
 	"dependencies": {
-		"@worldcoin/agentkit-core": "workspace:^",
+		"@worldcoin/agentkit-core": "^0.1.7",
 		"@x402/core": "^2.4.0"
 	},
 	"devDependencies": {
