@@ -1,6 +1,6 @@
 {
 	"name": "@worldcoin/agentkit",
-	"version": "0.1.7",
+	"version": "0.1.8",
 	"repository": {
 		"type": "git",
 		"url": "https://github.com/worldcoin/agentkit.git",
@@ -31,7 +31,7 @@
 		"build": "tsup"
 	},
 	"dependencies": {
-		"@worldcoin/agentkit-core": "^0.1.7",
+		"@worldcoin/agentkit-core": "^0.1.8",
 		"@x402/core": "^2.4.0"
 	},
 	"devDependencies": {
