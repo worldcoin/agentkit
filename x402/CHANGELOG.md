@@ -1,5 +1,12 @@
 # @worldcoin/agentkit
 
+## 0.1.8
+
+### Patch Changes
+
+- 24fe7a2: fix: replace workspace:^ with semver range for agentkit-core dependency
+    - @worldcoin/agentkit-core@0.1.8
+
 ## 0.1.7
 
 ### Patch Changes
