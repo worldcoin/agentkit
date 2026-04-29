@@ -134,6 +134,12 @@ function isAgentkitExtension(value: unknown): value is AgentkitExtension {
 }
 
 function encodeBase64(value: string): string {
-	if (typeof btoa === 'function') return btoa(value)
+	if (typeof btoa === 'function') {
+		let binary = ''
+		for (const byte of new TextEncoder().encode(value)) {
+			binary += String.fromCharCode(byte)
+		}
+		return btoa(binary)
+	}
 	return Buffer.from(value, 'utf8').toString('base64')
 }

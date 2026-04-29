@@ -75,6 +75,24 @@ describe('createAgentkitHeader', () => {
 		expect(payload.signature).toBe(SIGNATURE)
 		expect(signer.messages).toEqual([message])
 	})
+
+	it('encodes Unicode payloads in browser btoa environments', async () => {
+		const originalBtoa = globalThis.btoa
+		globalThis.btoa = (value: string) => Buffer.from(value, 'binary').toString('base64')
+
+		try {
+			const signer = createEVMSigner()
+			const extension = createExtension()
+			extension.info.statement = 'Verify this human-backed agent: 你好'
+
+			const header = await createAgentkitHeader({ extension, signer })
+			const payload = JSON.parse(Buffer.from(header, 'base64').toString('utf8')) as AgentkitPayload
+
+			expect(payload.statement).toBe(extension.info.statement)
+		} finally {
+			globalThis.btoa = originalBtoa
+		}
+	})
 })
 
 describe('createAgentkitFetch', () => {
