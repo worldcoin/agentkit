@@ -1,15 +1,14 @@
 import { describe, expect, it } from 'bun:test'
-import { privateKeyToAccount } from 'viem/accounts'
+import { generatePrivateKey, privateKeyToAccount } from 'viem/accounts'
 import { createAgentkitHooks } from '../src/hooks'
 import type { AgentkitPayload } from '@worldcoin/agentkit-core'
 import type { AgentKitStorage } from '../src/storage'
 import { formatSIWEMessage } from '@worldcoin/agentkit-core'
 
-const PRIVATE_KEY = '0x0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef'
 const CHAIN_ID = 'eip155:8453'
 
 async function createSignedRequest(url = 'https://agentkit.example/protected') {
-	const account = privateKeyToAccount(PRIVATE_KEY)
+	const account = privateKeyToAccount(generatePrivateKey())
 	const address = account.address
 	const unsignedPayload = {
 		domain: new URL(url).hostname,
