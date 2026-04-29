@@ -22,49 +22,48 @@ export type AgentkitFetchEvent =
 	| { type: 'agentkit_skipped'; url: string; reason: string }
 	| { type: 'agentkit_retry_completed'; url: string; status: number }
 
-export interface CreateAgentkitHeaderOptions {
-	extension: AgentkitExtension
-	signer: AgentkitSigner
-}
-
-export interface CreateAgentkitFetchOptions {
+export interface CreateAgentkitClientOptions {
 	signer: AgentkitSigner
 	fetch?: typeof fetch
 	onEvent?: (event: AgentkitFetchEvent) => void
 }
 
-export async function createAgentkitHeader(options: CreateAgentkitHeaderOptions): Promise<string> {
-	const supported = selectSupportedChain(options.extension, options.signer)
-	if (!supported) {
-		throw new Error(`Signer ${options.signer.chainId}/${options.signer.type} is not supported by this resource`)
-	}
-
-	const completeInfo: CompleteAgentkitInfo = {
-		...options.extension.info,
-		chainId: supported.chainId,
-		type: supported.type,
-		signatureScheme: supported.signatureScheme,
-	}
-
-	const message = formatSIWEMessage(completeInfo, options.signer.address)
-
-	const signature = await options.signer.signMessage(message)
-	const payload: AgentkitPayload = {
-		...options.extension.info,
-		address: options.signer.address,
-		chainId: supported.chainId,
-		type: supported.type,
-		...(supported.signatureScheme ? { signatureScheme: supported.signatureScheme } : {}),
-		signature,
-	}
-
-	return encodeBase64(JSON.stringify(payload))
+export interface AgentkitClient {
+	fetch: typeof fetch
+	createHeader(extension: AgentkitExtension): Promise<string>
 }
 
-export function createAgentkitFetch(options: CreateAgentkitFetchOptions): typeof fetch {
+export function createAgentkitClient(options: CreateAgentkitClientOptions): AgentkitClient {
 	const fetchFn = options.fetch ?? globalThis.fetch
 
-	return (async (input: Parameters<typeof fetch>[0], init?: Parameters<typeof fetch>[1]) => {
+	const createHeader = async (extension: AgentkitExtension): Promise<string> => {
+		const supported = selectSupportedChain(extension, options.signer)
+		if (!supported) {
+			throw new Error(`Signer ${options.signer.chainId}/${options.signer.type} is not supported by this resource`)
+		}
+
+		const completeInfo: CompleteAgentkitInfo = {
+			...extension.info,
+			chainId: supported.chainId,
+			type: supported.type,
+			signatureScheme: supported.signatureScheme,
+		}
+
+		const message = formatSIWEMessage(completeInfo, options.signer.address)
+		const signature = await options.signer.signMessage(message)
+		const payload: AgentkitPayload = {
+			...extension.info,
+			address: options.signer.address,
+			chainId: supported.chainId,
+			type: supported.type,
+			...(supported.signatureScheme ? { signatureScheme: supported.signatureScheme } : {}),
+			signature,
+		}
+
+		return encodeBase64(JSON.stringify(payload))
+	}
+
+	const agentkitFetch = (async (input: Parameters<typeof fetch>[0], init?: Parameters<typeof fetch>[1]) => {
 		const request = new Request(input, init)
 		const response = await fetchFn(request.clone())
 		if (response.status !== 402) return response
@@ -78,7 +77,7 @@ export function createAgentkitFetch(options: CreateAgentkitFetchOptions): typeof
 
 		let header: string
 		try {
-			header = await createAgentkitHeader({ extension, signer: options.signer })
+			header = await createHeader(extension)
 		} catch (err) {
 			options.onEvent?.({
 				type: 'agentkit_skipped',
@@ -103,6 +102,11 @@ export function createAgentkitFetch(options: CreateAgentkitFetchOptions): typeof
 
 		return retryResponse
 	}) as typeof fetch
+
+	return {
+		fetch: agentkitFetch,
+		createHeader,
+	}
 }
 
 function selectSupportedChain(extension: AgentkitExtension, signer: AgentkitSigner) {

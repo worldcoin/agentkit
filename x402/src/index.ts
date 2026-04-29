@@ -9,13 +9,13 @@ export { declareAgentkitExtension } from './declare'
 export { agentkitResourceServerExtension } from './server'
 
 // x402 client integration
-export { createAgentkitFetch, createAgentkitHeader } from './client'
+export { createAgentkitClient } from './client'
 export type {
+	AgentkitClient,
 	AgentkitFetchEvent,
 	AgentkitSigner,
 	AgentkitSignerType,
-	CreateAgentkitFetchOptions,
-	CreateAgentkitHeaderOptions,
+	CreateAgentkitClientOptions,
 } from './client'
 
 // Storage

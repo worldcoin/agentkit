@@ -63,12 +63,12 @@ Usage counters are tracked per **human** per **endpoint** — so two agents back
 
 ## Agent Client Usage
 
-If you are building an agent that calls paid x402 APIs, wrap the agent's HTTP client with `createAgentkitFetch`. The wrapper retries AgentKit-enabled 402 responses with a signed `agentkit` header before your normal x402 payment fallback runs.
+If you are building an agent that calls paid x402 APIs, create an AgentKit client and use `agentkit.fetch` for those calls. The client retries AgentKit-enabled 402 responses with a signed `agentkit` header before your normal x402 payment fallback runs.
 
 ```typescript
-import { createAgentkitFetch } from '@worldcoin/agentkit'
+import { createAgentkitClient } from '@worldcoin/agentkit'
 
-const fetchWithAgentkit = createAgentkitFetch({
+const agentkit = createAgentkitClient({
 	signer: {
 		address: agentWallet.address,
 		chainId: 'eip155:8453',
@@ -77,10 +77,10 @@ const fetchWithAgentkit = createAgentkitFetch({
 	},
 })
 
-const response = await fetchWithAgentkit('https://api.example.com/data')
+const response = await agentkit.fetch('https://api.example.com/data')
 ```
 
-The wrapper does not create payments. If AgentKit is unavailable, fails, or is exhausted, it returns the original 402 response so your existing x402 client can pay normally.
+The client does not create payments. If AgentKit is unavailable, fails, or is exhausted, it returns the original 402 response so your existing x402 client can pay normally.
 
 ### Framework Examples
 
@@ -88,12 +88,12 @@ You do not need separate framework packages for V1. Use the same helper where yo
 
 ```typescript
 // Vercel AI SDK / OpenAI Agents SDK tool body
-const response = await fetchWithAgentkit(url, requestInit)
+const response = await agentkit.fetch(url, requestInit)
 ```
 
 ```typescript
 // LangChain or LangGraph tool
-const callPaidApi = tool(async ({ url }) => fetchWithAgentkit(url), {
+const callPaidApi = tool(async ({ url }) => agentkit.fetch(url), {
 	name: 'call_paid_api',
 	description: 'Call paid APIs; AgentKit verification is attempted before x402 payment.',
 })
@@ -101,10 +101,10 @@ const callPaidApi = tool(async ({ url }) => fetchWithAgentkit(url), {
 
 ```typescript
 // Coinbase AgentKit custom action
-const action = async ({ url }) => fetchWithAgentkit(url)
+const action = async ({ url }) => agentkit.fetch(url)
 ```
 
-For Hermes, Codex, Claude Code, and other local agents, either call code that uses `createAgentkitFetch` or install the `agentkit-x402` skill so the agent knows to attempt AgentKit before payment when it cannot change the HTTP client.
+For Hermes, Codex, Claude Code, and other local agents, either call code that uses `createAgentkitClient` or install the `agentkit-x402` skill so the agent knows to attempt AgentKit before payment when it cannot change the HTTP client.
 
 ## Server Usage
 
@@ -363,9 +363,9 @@ Configures the extension for 402 responses. Most parameters are auto-derived fro
 | `expirationSeconds` | `number`             | Challenge TTL in seconds.                                 |
 | `mode`              | `AgentkitMode`       | Access mode (included in 402 response for clients).       |
 
-### `createAgentkitFetch(options)`
+### `createAgentkitClient(options)`
 
-Creates a fetch wrapper that tries AgentKit verification before normal x402 payment.
+Creates a client that tries AgentKit verification before normal x402 payment.
 
 | Option    | Type                                     | Description                                         |
 | --------- | ---------------------------------------- | --------------------------------------------------- |
@@ -373,11 +373,14 @@ Creates a fetch wrapper that tries AgentKit verification before normal x402 paym
 | `fetch`   | `typeof fetch`                           | Optional base fetch implementation.                 |
 | `onEvent` | `(event: AgentkitFetchEvent) => void`    | Optional callback for logging and debugging.        |
 
-The returned function has the same shape as `fetch`. It only retries when the first response is a 402 with `extensions.agentkit`.
+`agentkit.fetch` has the same shape as `fetch`. It only retries when the first response is a 402 with `extensions.agentkit`.
 
-### `createAgentkitHeader(options)`
+**Returns:**
 
-Creates the base64 `agentkit` HTTP header from an AgentKit extension and signer. Use this for custom HTTP clients that cannot use `createAgentkitFetch`.
+| Field          | Type                                      | Description                                                                 |
+| -------------- | ----------------------------------------- | --------------------------------------------------------------------------- |
+| `fetch`        | `typeof fetch`                            | Fetch-compatible function that retries AgentKit-enabled 402 responses once. |
+| `createHeader` | `(extension: AgentkitExtension) => Promise<string>` | Creates the base64 `agentkit` HTTP header for custom HTTP clients. |
 
 ### `createAgentkitHooks(options)`
 

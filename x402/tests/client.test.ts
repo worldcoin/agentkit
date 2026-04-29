@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'bun:test'
-import { createAgentkitFetch, createAgentkitHeader, type AgentkitSigner } from '../src/client'
+import { createAgentkitClient, type AgentkitSigner } from '../src/client'
 import { buildAgentkitSchema, formatSIWEMessage } from '@worldcoin/agentkit-core'
 import type { AgentkitExtension, AgentkitPayload } from '@worldcoin/agentkit-core'
 
@@ -59,12 +59,13 @@ function paymentRequired(extension?: AgentkitExtension) {
 	}
 }
 
-describe('createAgentkitHeader', () => {
+describe('createAgentkitClient', () => {
 	it('creates a base64 AgentKit header with a signed EVM payload', async () => {
 		const signer = createEVMSigner()
 		const extension = createExtension()
+		const agentkit = createAgentkitClient({ signer })
 
-		const header = await createAgentkitHeader({ extension, signer })
+		const header = await agentkit.createHeader(extension)
 		const payload = JSON.parse(Buffer.from(header, 'base64').toString('utf8')) as AgentkitPayload
 		const message = formatSIWEMessage(payload, signer.address)
 
@@ -83,9 +84,10 @@ describe('createAgentkitHeader', () => {
 		try {
 			const signer = createEVMSigner()
 			const extension = createExtension()
+			const agentkit = createAgentkitClient({ signer })
 			extension.info.statement = 'Verify this human-backed agent: 你好'
 
-			const header = await createAgentkitHeader({ extension, signer })
+			const header = await agentkit.createHeader(extension)
 			const payload = JSON.parse(Buffer.from(header, 'base64').toString('utf8')) as AgentkitPayload
 
 			expect(payload.statement).toBe(extension.info.statement)
@@ -93,14 +95,12 @@ describe('createAgentkitHeader', () => {
 			globalThis.btoa = originalBtoa
 		}
 	})
-})
 
-describe('createAgentkitFetch', () => {
 	it('retries 402 responses with an AgentKit header when the extension is present', async () => {
 		const signer = createEVMSigner()
 		const events: Array<Record<string, unknown>> = []
 		const seenHeaders: string[] = []
-		const fetchWithAgentkit = createAgentkitFetch({
+		const agentkit = createAgentkitClient({
 			signer,
 			onEvent: event => events.push(event),
 			fetch: async request => {
@@ -115,7 +115,7 @@ describe('createAgentkitFetch', () => {
 			},
 		})
 
-		const response = await fetchWithAgentkit('https://agentkit.example/protected')
+		const response = await agentkit.fetch('https://agentkit.example/protected')
 
 		expect(response.status).toBe(200)
 		expect(seenHeaders).toHaveLength(1)
@@ -125,23 +125,23 @@ describe('createAgentkitFetch', () => {
 	it('returns successful non-402 responses unchanged', async () => {
 		const signer = createEVMSigner()
 		const original = new Response('ok', { status: 200 })
-		const fetchWithAgentkit = createAgentkitFetch({
+		const agentkit = createAgentkitClient({
 			signer,
 			fetch: async () => original,
 		})
 
-		await expect(fetchWithAgentkit('https://agentkit.example/open')).resolves.toBe(original)
+		await expect(agentkit.fetch('https://agentkit.example/open')).resolves.toBe(original)
 	})
 
 	it('returns 402 responses without AgentKit unchanged', async () => {
 		const signer = createEVMSigner()
 		const original = new Response(JSON.stringify(paymentRequired()), { status: 402 })
-		const fetchWithAgentkit = createAgentkitFetch({
+		const agentkit = createAgentkitClient({
 			signer,
 			fetch: async () => original,
 		})
 
-		await expect(fetchWithAgentkit('https://agentkit.example/protected')).resolves.toBe(original)
+		await expect(agentkit.fetch('https://agentkit.example/protected')).resolves.toBe(original)
 	})
 
 	it('returns the original 402 and emits a skip event when the signer is unsupported', async () => {
@@ -155,13 +155,13 @@ describe('createAgentkitFetch', () => {
 		}
 		const events: Array<Record<string, unknown>> = []
 		const original = new Response(JSON.stringify(paymentRequired(createExtension())), { status: 402 })
-		const fetchWithAgentkit = createAgentkitFetch({
+		const agentkit = createAgentkitClient({
 			signer,
 			onEvent: event => events.push(event),
 			fetch: async () => original,
 		})
 
-		await expect(fetchWithAgentkit('https://agentkit.example/protected')).resolves.toBe(original)
+		await expect(agentkit.fetch('https://agentkit.example/protected')).resolves.toBe(original)
 		expect(events.map(event => event.type)).toEqual(['agentkit_detected', 'agentkit_skipped'])
 	})
 })

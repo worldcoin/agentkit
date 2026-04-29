@@ -17,12 +17,12 @@ When you receive a `402 Payment Required` response, **do not immediately proceed
 
 ## Preferred Runtime Helper
 
-If you can change the agent's HTTP client, use `createAgentkitFetch` from `@worldcoin/agentkit` and route x402 API calls through it. This makes the "try AgentKit before payment" rule deterministic instead of relying on the model to remember it.
+If you can change the agent's HTTP client, use `createAgentkitClient` from `@worldcoin/agentkit` and route x402 API calls through `agentkit.fetch`. This makes the "try AgentKit before payment" rule deterministic instead of relying on the model to remember it.
 
 ```typescript
-import { createAgentkitFetch } from '@worldcoin/agentkit'
+import { createAgentkitClient } from '@worldcoin/agentkit'
 
-const fetchWithAgentkit = createAgentkitFetch({
+const agentkit = createAgentkitClient({
   signer: {
     address: wallet.address,
     chainId: 'eip155:8453',
@@ -31,10 +31,10 @@ const fetchWithAgentkit = createAgentkitFetch({
   },
 })
 
-const response = await fetchWithAgentkit('https://api.example.com/data')
+const response = await agentkit.fetch('https://api.example.com/data')
 ```
 
-If the wrapper returns another 402, continue with the normal x402 payment flow.
+If `agentkit.fetch` returns another 402, continue with the normal x402 payment flow.
 
 ## Wallet Types
 

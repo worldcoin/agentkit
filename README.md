@@ -49,16 +49,16 @@ For the full registration guide (manual mode, custom relays, Base Sepolia): [`./
 
 ### Use
 
-Once registered, wrap your agent's x402 HTTP calls with `createAgentkitFetch`. It tries AgentKit verification before payment and only leaves the normal x402 payment flow in place when verification is unavailable, fails, or is exhausted.
+Once registered, create an AgentKit client and use `agentkit.fetch` for x402 HTTP calls. It tries AgentKit verification before payment and only leaves the normal x402 payment flow in place when verification is unavailable, fails, or is exhausted.
 
 ```bash
 npm install @worldcoin/agentkit
 ```
 
 ```typescript
-import { createAgentkitFetch } from '@worldcoin/agentkit'
+import { createAgentkitClient } from '@worldcoin/agentkit'
 
-const fetchWithAgentkit = createAgentkitFetch({
+const agentkit = createAgentkitClient({
 	signer: {
 		address: agentWallet.address,
 		chainId: 'eip155:8453',
@@ -67,7 +67,7 @@ const fetchWithAgentkit = createAgentkitFetch({
 	},
 })
 
-const response = await fetchWithAgentkit('https://api.example.com/data')
+const response = await agentkit.fetch('https://api.example.com/data')
 ```
 
 If your agent cannot change its HTTP client code, install the agent skill as fallback guidance:
