@@ -31,6 +31,12 @@ You can also run it directly without a global install:
 npx @worldcoin/agentkit-cli register <agent-address>
 ```
 
+Check an existing wallet registration:
+
+```bash
+npx @worldcoin/agentkit-cli status <agent-address>
+```
+
 ## Supported Networks
 
 - `base`

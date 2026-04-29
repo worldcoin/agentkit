@@ -8,6 +8,16 @@ export type { AgentkitMode, DeclareAgentkitOptions } from './types'
 export { declareAgentkitExtension } from './declare'
 export { agentkitResourceServerExtension } from './server'
 
+// x402 client integration
+export { createAgentkitClient } from './client'
+export type {
+	AgentkitClient,
+	AgentkitFetchEvent,
+	AgentkitSigner,
+	AgentkitSignerType,
+	CreateAgentkitClientOptions,
+} from './client'
+
 // Storage
 export { InMemoryAgentKitStorage, type AgentKitStorage } from './storage'
 

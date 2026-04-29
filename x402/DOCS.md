@@ -61,6 +61,51 @@ Usage counters are tracked per **human** per **endpoint** — so two agents back
 4. Server validates the signature, recovers the wallet address, and looks up the human identifier in the AgentBook
 5. If the agent is registered and the access mode allows it, access is granted or a discount is applied. Otherwise, the standard payment flow continues.
 
+## Agent Client Usage
+
+If you are building an agent that calls paid x402 APIs, create an AgentKit client and use `agentkit.fetch` for those calls. The client retries AgentKit-enabled 402 responses with a signed `agentkit` header before your normal x402 payment fallback runs.
+
+```typescript
+import { createAgentkitClient } from '@worldcoin/agentkit'
+
+const agentkit = createAgentkitClient({
+	signer: {
+		address: agentWallet.address,
+		chainId: 'eip155:8453',
+		type: 'eip191',
+		signMessage: message => agentWallet.signMessage(message),
+	},
+})
+
+const response = await agentkit.fetch('https://api.example.com/data')
+```
+
+The client does not create payments. If AgentKit is unavailable, fails, or is exhausted, it returns the original 402 response so your existing x402 client can pay normally.
+
+### Framework Examples
+
+You do not need separate framework packages for V1. Use the same helper where your framework makes HTTP calls:
+
+```typescript
+// Vercel AI SDK / OpenAI Agents SDK tool body
+const response = await agentkit.fetch(url, requestInit)
+```
+
+```typescript
+// LangChain or LangGraph tool
+const callPaidApi = tool(async ({ url }) => agentkit.fetch(url), {
+	name: 'call_paid_api',
+	description: 'Call paid APIs; AgentKit verification is attempted before x402 payment.',
+})
+```
+
+```typescript
+// Coinbase AgentKit custom action
+const action = async ({ url }) => agentkit.fetch(url)
+```
+
+For Hermes, Codex, Claude Code, and other local agents, either call code that uses `createAgentkitClient` or install the `agentkit-x402` skill so the agent knows to attempt AgentKit before payment when it cannot change the HTTP client.
+
 ## Server Usage
 
 AgentKit is published as `@worldcoin/agentkit` and is intended to be consumed as a normal npm package in your server application.
@@ -272,9 +317,9 @@ async function handleRequest(request: Request) {
 }
 ```
 
-## Multi-Chain Support
+## EVM Network Support
 
-Servers can accept authentication from multiple blockchain ecosystems:
+Servers can accept authentication on any EVM network expressed as a CAIP-2 chain ID:
 
 ```typescript
 const routes = {
@@ -283,39 +328,24 @@ const routes = {
 			{
 				scheme: 'exact',
 				price: '$0.01',
-				network: 'eip155:8453', // Base
-				payTo: '0xYourEVMAddress',
-			},
-			{
-				scheme: 'exact',
-				price: '$0.01',
-				network: 'solana:5eykt4UsFv8P8NJdTREpY1vzqKqZKvdp', // Solana mainnet
-				payTo: 'YourSolanaAddress',
-			},
-		],
-		extensions: declareAgentkitExtension({
-			network: ['eip155:8453', 'solana:5eykt4UsFv8P8NJdTREpY1vzqKqZKvdp'],
-			statement: 'Verify your agent is backed by a real human',
-		}),
-	},
+					network: 'eip155:8453', // Base
+					payTo: '0xYourEVMAddress',
+				},
+			],
+			extensions: declareAgentkitExtension({
+				network: 'eip155:8453',
+				statement: 'Verify your agent is backed by a real human',
+			}),
+		},
 }
 ```
 
 ## Supported Chains
 
-### EVM (Ethereum, Base, Polygon, etc.)
-
 - **Chain ID format:** `eip155:*` (e.g., `eip155:8453` for Base)
 - **Signature type:** `eip191`
 - **Signature schemes:** `eip191` (EOA, default), `eip1271` (smart contract), `eip6492` (counterfactual)
 - **Message format:** EIP-4361 (SIWE)
-
-### Solana
-
-- **Chain ID format:** `solana:*` (e.g., `solana:5eykt4UsFv8P8NJdTREpY1vzqKqZKvdp` for mainnet)
-- **Signature type:** `ed25519`
-- **Signature scheme:** `siws`
-- **Message format:** Sign-In With Solana
 
 ## API Reference
 
@@ -332,6 +362,25 @@ Configures the extension for 402 responses. Most parameters are auto-derived fro
 | `version`           | `string`             | CAIP-122 version (default: `"1"`).                        |
 | `expirationSeconds` | `number`             | Challenge TTL in seconds.                                 |
 | `mode`              | `AgentkitMode`       | Access mode (included in 402 response for clients).       |
+
+### `createAgentkitClient(options)`
+
+Creates a client that tries AgentKit verification before normal x402 payment.
+
+| Option    | Type                                     | Description                                         |
+| --------- | ---------------------------------------- | --------------------------------------------------- |
+| `signer`  | `AgentkitSigner`                         | Agent wallet identity and `signMessage` function.   |
+| `fetch`   | `typeof fetch`                           | Optional base fetch implementation.                 |
+| `onEvent` | `(event: AgentkitFetchEvent) => void`    | Optional callback for logging and debugging.        |
+
+`agentkit.fetch` has the same shape as `fetch`. It only retries when the first response is a 402 with `extensions.agentkit`.
+
+**Returns:**
+
+| Field          | Type                                      | Description                                                                 |
+| -------------- | ----------------------------------------- | --------------------------------------------------------------------------- |
+| `fetch`        | `typeof fetch`                            | Fetch-compatible function that retries AgentKit-enabled 402 responses once. |
+| `createHeader` | `(extension: AgentkitExtension) => Promise<string>` | Creates the base64 `agentkit` HTTP header for custom HTTP clients. |
 
 ### `createAgentkitHooks(options)`
 
@@ -401,7 +450,7 @@ Returns `{ valid: boolean; error?: string }`.
 
 ### `verifyAgentkitSignature(payload, options?)`
 
-Verifies the cryptographic signature and recovers the signer address. Routes to EVM or Solana verification based on the `chainId` prefix. EVM verification uses ERC-1271 (smart wallets) with ecrecover fallback (EOA) automatically.
+Verifies the cryptographic signature and recovers the signer address. EVM verification uses ERC-1271 (smart wallets) with ecrecover fallback (EOA) automatically.
 
 | Option   | Type     | Description                                                                                    |
 | -------- | -------- | ---------------------------------------------------------------------------------------------- |
