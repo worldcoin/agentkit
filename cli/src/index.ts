@@ -21,17 +21,90 @@ const AGENT_BOOK_ABI = [
 		stateMutability: 'view',
 		type: 'function',
 	},
+	{
+		inputs: [{ internalType: 'address', name: '', type: 'address' }],
+		name: 'lookupHuman',
+		outputs: [{ internalType: 'uint256', name: 'humanId', type: 'uint256' }],
+		stateMutability: 'view',
+		type: 'function',
+	},
 ] as const
 
 const APP_ID = 'app_a7c3e2b6b83927251a0db5345bd7146a'
 const ACTION = 'agentbook-registration'
 const DEFAULT_API_URL = 'https://x402-worldchain.vercel.app'
+const AGENT_BOOK_NETWORK = 'eip155:480'
 
 // ─── CLI ─────────────────────────────────────────────────────────────────────
 
 const cli = Cli.create('agentkit', {
 	description: 'Register agent wallets with World ID-verified humans via AgentBook.',
 	version: '0.1.0',
+})
+
+cli.command('status', {
+	description: 'Check whether an agent wallet is registered in AgentBook.',
+	args: z.object({
+		address: z.string().regex(/^0x[a-fA-F0-9]{40}$/, 'Invalid Ethereum address').describe('Agent wallet address'),
+	}),
+	outputPolicy: 'agent-only',
+	output: z.object({
+		agent: z.string(),
+		registered: z.boolean(),
+		humanId: z.string().nullable(),
+		contract: z.string(),
+		network: z.string(),
+	}),
+	examples: [
+		{
+			args: { address: '0x1234567890abcdef1234567890abcdef12345678' },
+			description: 'Check AgentBook registration status',
+		},
+	],
+	async run(c) {
+		const agentAddress = c.args.address as `0x${string}`
+		const client = createPublicClient({ chain: worldchain, transport: http() })
+
+		if (!c.agent) console.log(`  Looking up AgentBook status for ${agentAddress}...`)
+
+		let humanIdRaw: bigint
+		try {
+			humanIdRaw = await client.readContract({
+				address: AGENT_BOOK_CONTRACT,
+				abi: AGENT_BOOK_ABI,
+				functionName: 'lookupHuman',
+				args: [agentAddress],
+			})
+		} catch (err) {
+			return c.error({
+				code: 'STATUS_LOOKUP_FAILED',
+				message: err instanceof Error ? err.message : 'Unable to look up AgentBook status',
+				retryable: true,
+			})
+		}
+
+		const humanId = humanIdRaw === 0n ? null : bigintToHex(humanIdRaw)
+		const result = {
+			agent: agentAddress,
+			registered: humanId !== null,
+			humanId,
+			contract: AGENT_BOOK_CONTRACT,
+			network: AGENT_BOOK_NETWORK,
+		}
+
+		if (!c.agent) {
+			const status = result.registered ? '\x1b[32mregistered\x1b[0m' : '\x1b[33munregistered\x1b[0m'
+			console.log()
+			console.log(`  Agent:   \x1b[36m${result.agent}\x1b[0m`)
+			console.log(`  Status:  ${status}`)
+			if (result.humanId) console.log(`  Human:   \x1b[90m${result.humanId}\x1b[0m`)
+			console.log(`  Network: World Chain (${result.network})`)
+			console.log(`  Contract: \x1b[90m${result.contract}\x1b[0m`)
+			console.log()
+		}
+
+		return result
+	},
 })
 
 cli.command('register', {
@@ -207,6 +280,10 @@ export default cli
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
 type VerifyCompletion = { success: true; proof: ISuccessResult } | { success: false; error: string }
+
+function bigintToHex(value: bigint): string {
+	return `0x${value.toString(16)}`
+}
 
 async function waitForCompletion(
 	worldID: ReturnType<typeof createWorldBridgeStore>,

@@ -39,11 +39,42 @@ npx @worldcoin/agentkit-cli register <your-wallet-address>
 
 This will prompt a World ID verification via World App. You only need to register once per wallet.
 
+Check whether a wallet is already registered:
+
+```bash
+npx @worldcoin/agentkit-cli status <your-wallet-address>
+```
+
 For the full registration guide (manual mode, custom relays, Base Sepolia): [`./cli/REGISTRATION.md`](./cli/REGISTRATION.md)
 
 ### Use
 
-Once registered, you can authenticate with any x402 endpoint that has the AgentKit extension to get free or discounted access instead of paying.
+Once registered, wrap your agent's x402 HTTP calls with `createAgentkitFetch`. It tries AgentKit verification before payment and only leaves the normal x402 payment flow in place when verification is unavailable, fails, or is exhausted.
+
+```bash
+npm install @worldcoin/agentkit
+```
+
+```typescript
+import { createAgentkitFetch } from '@worldcoin/agentkit'
+
+const fetchWithAgentkit = createAgentkitFetch({
+	signer: {
+		address: agentWallet.address,
+		chainId: 'eip155:8453',
+		type: 'eip191',
+		signMessage: message => agentWallet.signMessage(message),
+	},
+})
+
+const response = await fetchWithAgentkit('https://api.example.com/data')
+```
+
+If your agent cannot change its HTTP client code, install the agent skill as fallback guidance:
+
+```bash
+npx skills add worldcoin/agentkit agentkit-x402
+```
 
 The full flow — parsing 402 responses, signing the CAIP-122 challenge, and sending the `agentkit` header — is documented in the agent skill: [`./skills/agentkit-x402/SKILL.md`](./skills/agentkit-x402/SKILL.md)
 
@@ -57,4 +88,4 @@ Add AgentKit to your x402 server to offer human-backed agents free access, free 
 npm install @worldcoin/agentkit
 ```
 
-For the full integration guide (hooks setup, access modes, World Chain payments, AgentBook configuration): [`./agentkit/DOCS.md`](./agentkit/DOCS.md)
+For the full integration guide (client wrapper, hooks setup, access modes, World Chain payments, AgentBook configuration): [`./x402/DOCS.md`](./x402/DOCS.md)

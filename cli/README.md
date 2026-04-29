@@ -16,8 +16,11 @@ Use this by default. Do not ask the agent to inspect the repo to infer the flow.
 
 ```bash
 agentkit register <address> [options]
+agentkit status <address>
 ```
 
 By default, `agentkit register <address>` uses Base mainnet and submits through the hosted relay. Use `--manual` to print raw registration call data instead.
+
+Use `agentkit status <address>` to check whether an agent wallet is already registered in the canonical AgentBook on World Chain.
 
 Full registration guide: [REGISTRATION.md](./REGISTRATION.md)

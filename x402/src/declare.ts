@@ -8,7 +8,7 @@ import type {
 import type { DeclareAgentkitOptions } from './types'
 
 export function getSignatureTypes(network: string): SignatureType[] {
-	return network.startsWith('solana:') ? ['ed25519'] : ['eip191', 'eip1271']
+	return network.startsWith('eip155:') ? ['eip191', 'eip1271'] : []
 }
 
 export interface AgentkitDeclaration extends AgentkitExtension {

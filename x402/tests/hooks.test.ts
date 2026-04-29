@@ -1,26 +1,29 @@
-import nacl from 'tweetnacl'
 import { describe, expect, it } from 'bun:test'
+import { privateKeyToAccount } from 'viem/accounts'
 import { createAgentkitHooks } from '../src/hooks'
 import type { AgentkitPayload } from '@worldcoin/agentkit-core'
 import type { AgentKitStorage } from '../src/storage'
-import { SOLANA_MAINNET, encodeBase58, formatSIWSMessage } from '@worldcoin/agentkit-core'
+import { formatSIWEMessage } from '@worldcoin/agentkit-core'
 
-function createSignedRequest(url = 'https://agentkit.example/protected') {
-	const keyPair = nacl.sign.keyPair()
-	const address = encodeBase58(keyPair.publicKey)
+const PRIVATE_KEY = '0x0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef'
+const CHAIN_ID = 'eip155:8453'
+
+async function createSignedRequest(url = 'https://agentkit.example/protected') {
+	const account = privateKeyToAccount(PRIVATE_KEY)
+	const address = account.address
 	const unsignedPayload = {
 		domain: new URL(url).hostname,
 		address,
 		uri: url,
 		version: '1',
-		chainId: SOLANA_MAINNET,
-		type: 'ed25519',
-		nonce: 'nonce-123',
+		chainId: CHAIN_ID,
+		type: 'eip191',
+		nonce: 'nonce1234',
 		issuedAt: new Date().toISOString(),
 	} satisfies Omit<AgentkitPayload, 'signature'>
 
-	const message = formatSIWSMessage(unsignedPayload, address)
-	const signature = encodeBase58(nacl.sign.detached(new TextEncoder().encode(message), keyPair.secretKey))
+	const message = formatSIWEMessage(unsignedPayload, address)
+	const signature = await account.signMessage({ message })
 	const payload: AgentkitPayload = { ...unsignedPayload, signature }
 
 	return {
@@ -44,7 +47,7 @@ function createAdapter(url: string, header: string) {
 
 describe('createAgentkitHooks', () => {
 	it('uses tryIncrementUsage to grant free-trial access', async () => {
-		const request = createSignedRequest()
+		const request = await createSignedRequest()
 		const usageCalls: Array<{ endpoint: string; humanId: string; limit: number }> = []
 		const events: Array<Record<string, string>> = []
 		const storage: AgentKitStorage = {
@@ -79,7 +82,7 @@ describe('createAgentkitHooks', () => {
 	})
 
 	it('uses tryIncrementUsage to recover discounted underpayments', async () => {
-		const request = createSignedRequest()
+		const request = await createSignedRequest()
 		const usageCalls: Array<{ endpoint: string; humanId: string; limit: number }> = []
 		const events: Array<Record<string, string>> = []
 		const storage: AgentKitStorage = {

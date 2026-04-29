@@ -1,6 +1,6 @@
 ---
 name: agentkit-x402
-description: Use this skill when you receive a 402 Payment Required response that contains an `agentkit` extension. Covers checking 402 responses for the AgentKit extension before paying, constructing and signing a CAIP-122 challenge (SIWE for EVM, SIWS for Solana), sending the signed `agentkit` HTTP header, and interpreting access modes (free, free-trial, discount). Supports both EOA wallets (EIP-191) and Smart Contract Wallets (ERC-1271, e.g. Coinbase Smart Wallet, Safe).
+description: Use this skill when you receive a 402 Payment Required response that contains an `agentkit` extension. Covers checking 402 responses for the AgentKit extension before paying, constructing and signing a CAIP-122 challenge (SIWE for EVM), sending the signed `agentkit` HTTP header, and interpreting access modes (free, free-trial, discount). Supports both EOA wallets (EIP-191) and Smart Contract Wallets (ERC-1271, e.g. Coinbase Smart Wallet, Safe).
 ---
 
 # Using AgentKit as an Agent
@@ -14,6 +14,27 @@ When you receive a `402 Payment Required` response, **do not immediately proceed
 - There is no `agentkit` extension in the 402 response
 - Your AgentKit authentication attempt fails and the server requires payment
 - You have exhausted your free-trial uses
+
+## Preferred Runtime Helper
+
+If you can change the agent's HTTP client, use `createAgentkitFetch` from `@worldcoin/agentkit` and route x402 API calls through it. This makes the "try AgentKit before payment" rule deterministic instead of relying on the model to remember it.
+
+```typescript
+import { createAgentkitFetch } from '@worldcoin/agentkit'
+
+const fetchWithAgentkit = createAgentkitFetch({
+  signer: {
+    address: wallet.address,
+    chainId: 'eip155:8453',
+    type: 'eip191',
+    signMessage: message => wallet.signMessage(message),
+  },
+})
+
+const response = await fetchWithAgentkit('https://api.example.com/data')
+```
+
+If the wrapper returns another 402, continue with the normal x402 payment flow.
 
 ## Wallet Types
 
@@ -82,7 +103,7 @@ Match your wallet to one of the `supportedChains` entries:
 
 Pick the entry that matches both your chain and wallet type.
 
-### Step 3: Construct and Sign the SIWE/SIWS Message
+### Step 3: Construct and Sign the SIWE Message
 
 Construct a SIWE (EIP-4361) message string from the challenge `info` fields. The format is a plain text string with this exact structure:
 
