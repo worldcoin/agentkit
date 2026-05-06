@@ -1,0 +1,14 @@
+[workspace]
+members = [
+  "client",
+]
+resolver = "2"
+
+[workspace.package]
+version = "0.0.1"
+edition = "2024"
+license = "MIT"
+authors = [
+    "Paolo D'Amico <paolodamico@users.noreply.github.com>",
+    "Andy Wang <41224501+andy-t-wang@users.noreply.github.com>"
+]

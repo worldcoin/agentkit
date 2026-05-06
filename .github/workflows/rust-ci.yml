@@ -1,0 +1,81 @@
+name: Rust CI
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref == 'refs/heads/main' && github.sha || github.ref }}
+  cancel-in-progress: ${{ !contains(github.ref, 'main')}}
+
+permissions: {}
+
+env:
+  CARGO_TERM_COLOR: always
+
+on:
+    push:
+        branches: [main]
+    pull_request:
+
+jobs:
+  lint:
+    name: Format, Clippy & Build
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v6
+
+      - name: Set up Rust
+        uses: dtolnay/rust-toolchain@master
+        with:
+          toolchain: stable
+          components: clippy,rustfmt
+
+      - name: Check code formatting
+        run: cargo fmt -- --check
+
+      - name: Run clippy
+        run: cargo clippy --workspace --all-targets --all-features
+
+      - name: Run clippy (default features)
+        run: cargo clippy --workspace --all-targets
+
+  test:
+    name: Test
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v6
+
+      - name: Set up Rust
+        uses: dtolnay/rust-toolchain@master
+        with:
+          toolchain: stable
+
+      - name: Test
+        run: cargo test --all-features
+
+  deny:
+      name: Cargo deny
+      runs-on: ubuntu-latest
+      permissions:
+        contents: read
+      strategy:
+        matrix:
+          checks:
+            - advisories
+            - bans licenses sources
+
+      continue-on-error: ${{ matrix.checks == 'advisories' }}
+
+      steps:
+        - name: Checkout code
+          uses: actions/checkout@v6
+
+        - uses: EmbarkStudios/cargo-deny-action@v2
+          with:
+            command: check ${{ matrix.checks }}
+            rust-version: 1.94
