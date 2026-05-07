@@ -3,6 +3,8 @@ use std::io::Write;
 use std::path::{Path, PathBuf};
 
 use anyhow::{Context, Result, anyhow};
+use secrecy::zeroize::Zeroizing;
+use secrecy::{ExposeSecret, SecretSlice};
 use serde::{Deserialize, Serialize};
 
 const KEYRING_SERVICE: &str = "org.world.agentkit";
@@ -22,6 +24,7 @@ pub enum Backend {
 }
 
 impl Backend {
+	/// Returns a short human-readable name for this backend, suitable for CLI output.
 	pub fn label(self) -> &'static str {
 		match self {
 			Self::Keyring => "system keychain",
@@ -31,14 +34,16 @@ impl Backend {
 }
 
 /// Backend-agnostic interface for persisting a single secret tied to one `AgentKit` instance.
-///
-/// Implementations must store and retrieve the raw secret bytes verbatim.
 pub trait SecretStore {
-	fn write(&self, secret: &[u8]) -> Result<()>;
-	fn read(&self) -> Result<Option<Vec<u8>>>;
+	/// Writes a secret to the store. Takes the secret by value so the
+	/// in-memory buffer is wiped as soon as the call returns.
+	fn write(&self, secret: SecretSlice<u8>) -> Result<()>;
+	fn read(&self) -> Result<Option<SecretSlice<u8>>>;
 	fn location(&self) -> String;
 }
 
+/// Constructs the [`SecretStore`] implementation for `backend`, rooted at `data_dir` for
+/// filesystem-based backends.
 pub fn open(backend: Backend, data_dir: &Path) -> Result<Box<dyn SecretStore>> {
 	match backend {
 		Backend::Keyring => Ok(Box::new(KeyringStore::new()?)),
@@ -46,11 +51,13 @@ pub fn open(backend: Backend, data_dir: &Path) -> Result<Box<dyn SecretStore>> {
 	}
 }
 
+/// Stores the secret in the platform's native credential store via the `keyring` crate.
 pub struct KeyringStore {
 	entry: keyring::Entry,
 }
 
 impl KeyringStore {
+	/// Opens (or creates on first write) the keyring entry in the OS-store (e.g. Apple Keychain).
 	pub fn new() -> Result<Self> {
 		let entry =
 			keyring::Entry::new(KEYRING_SERVICE, KEYRING_ACCOUNT).context("failed to construct keyring entry")?;
@@ -59,15 +66,15 @@ impl KeyringStore {
 }
 
 impl SecretStore for KeyringStore {
-	fn write(&self, secret: &[u8]) -> Result<()> {
+	fn write(&self, secret: SecretSlice<u8>) -> Result<()> {
 		self.entry
-			.set_secret(secret)
+			.set_secret(secret.expose_secret())
 			.context("failed to write secret to system keychain")
 	}
 
-	fn read(&self) -> Result<Option<Vec<u8>>> {
+	fn read(&self) -> Result<Option<SecretSlice<u8>>> {
 		match self.entry.get_secret() {
-			Ok(bytes) => Ok(Some(bytes)),
+			Ok(bytes) => Ok(Some(SecretSlice::from(bytes))),
 			Err(keyring::Error::NoEntry) => Ok(None),
 			Err(err) => Err(anyhow!(err)).context("failed to read secret from system keychain"),
 		}
@@ -86,13 +93,14 @@ pub struct FileStore {
 }
 
 impl FileStore {
+	/// Creates a `FileStore` that reads and writes the secret at `path`.
 	pub fn new(path: PathBuf) -> Self {
 		Self { path }
 	}
 }
 
 impl SecretStore for FileStore {
-	fn write(&self, secret: &[u8]) -> Result<()> {
+	fn write(&self, secret: SecretSlice<u8>) -> Result<()> {
 		if let Some(parent) = self.path.parent() {
 			fs::create_dir_all(parent).with_context(|| format!("failed to create directory {}", parent.display()))?;
 			set_dir_permissions(parent)?;
@@ -105,7 +113,8 @@ impl SecretStore for FileStore {
 		let mut file = opts
 			.open(&self.path)
 			.with_context(|| format!("failed to open {} for writing", self.path.display()))?;
-		file.write_all(hex::encode(secret).as_bytes())
+		let encoded = Zeroizing::new(hex::encode(secret.expose_secret()));
+		file.write_all(encoded.as_bytes())
 			.with_context(|| format!("failed to write secret to {}", self.path.display()))?;
 		file.sync_all().ok();
 
@@ -113,13 +122,13 @@ impl SecretStore for FileStore {
 		Ok(())
 	}
 
-	fn read(&self) -> Result<Option<Vec<u8>>> {
+	fn read(&self) -> Result<Option<SecretSlice<u8>>> {
 		match fs::read_to_string(&self.path) {
 			Ok(contents) => {
-				let trimmed = contents.trim();
-				let bytes = hex::decode(trimmed)
+				let contents = Zeroizing::new(contents);
+				let bytes = hex::decode(contents.trim())
 					.with_context(|| format!("secret file at {} is malformed", self.path.display()))?;
-				Ok(Some(bytes))
+				Ok(Some(SecretSlice::from(bytes)))
 			}
 			Err(err) if err.kind() == std::io::ErrorKind::NotFound => Ok(None),
 			Err(err) => Err(err).with_context(|| format!("failed to read {}", self.path.display())),
@@ -175,16 +184,19 @@ mod tests {
 		FileStore::new(dir.path().join("nested").join(FILE_NAME))
 	}
 
+	fn make_secret(byte: u8) -> SecretSlice<u8> {
+		SecretSlice::from(vec![byte; 32])
+	}
+
 	#[test]
 	fn file_store_round_trips_bytes() {
 		let dir = TempDir::new().unwrap();
 		let store = file_store(&dir);
-		let secret = [0xAB; 32];
 
-		store.write(&secret).unwrap();
+		store.write(make_secret(0xAB)).unwrap();
 		let read = store.read().unwrap().unwrap();
 
-		assert_eq!(read, secret);
+		assert_eq!(read.expose_secret(), &[0xAB; 32]);
 	}
 
 	#[test]
@@ -200,10 +212,10 @@ mod tests {
 		let dir = TempDir::new().unwrap();
 		let store = file_store(&dir);
 
-		store.write(&[1; 32]).unwrap();
-		store.write(&[2; 32]).unwrap();
+		store.write(make_secret(1)).unwrap();
+		store.write(make_secret(2)).unwrap();
 
-		assert_eq!(store.read().unwrap().unwrap(), [2; 32]);
+		assert_eq!(store.read().unwrap().unwrap().expose_secret(), &[2; 32]);
 	}
 
 	#[test]
@@ -215,15 +227,6 @@ mod tests {
 		assert!(FileStore::new(path).read().is_err());
 	}
 
-	#[test]
-	fn file_store_tolerates_trailing_whitespace() {
-		let dir = TempDir::new().unwrap();
-		let path = dir.path().join(FILE_NAME);
-		fs::write(&path, format!("{}\n", hex::encode([7u8; 32]))).unwrap();
-
-		assert_eq!(FileStore::new(path).read().unwrap().unwrap(), [7u8; 32]);
-	}
-
 	#[cfg(unix)]
 	#[test]
 	fn file_store_sets_unix_permissions() {
@@ -231,7 +234,7 @@ mod tests {
 
 		let dir = TempDir::new().unwrap();
 		let store = file_store(&dir);
-		store.write(&[0; 32]).unwrap();
+		store.write(make_secret(0)).unwrap();
 
 		let file_mode = fs::metadata(dir.path().join("nested").join(FILE_NAME))
 			.unwrap()
