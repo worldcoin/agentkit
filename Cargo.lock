@@ -8520,6 +8520,7 @@ dependencies = [
  "getrandom 0.3.4",
  "hex",
  "keyring",
+ "secrecy",
  "serde",
  "serde_json",
  "tempfile",
