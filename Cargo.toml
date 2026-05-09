@@ -12,3 +12,16 @@ authors = [
     "Paolo D'Amico <paolodamico@users.noreply.github.com>",
     "Andy Wang <41224501+andy-t-wang@users.noreply.github.com>"
 ]
+
+[workspace.lints.rust]
+missing_docs = "deny"
+dead_code = "deny"
+
+[workspace.lints.clippy]
+pedantic = { level = "warn", priority = -1 }
+unwrap_used = "deny"
+expect_used = "warn"
+panic = "deny"
+dbg_macro = "deny"
+todo = "deny"
+mem_forget = "deny"
