@@ -1,4 +1,4 @@
-import nacl from 'tweetnacl'
+import { ed25519 } from '@noble/curves/ed25519'
 import { base58 } from '@scure/base'
 import type { CompleteAgentkitInfo } from './types'
 
@@ -48,7 +48,13 @@ export function formatSIWSMessage(info: CompleteAgentkitInfo, address: string): 
 
 export function verifySolanaSignature(message: string, signature: Uint8Array, publicKey: Uint8Array): boolean {
 	const messageBytes = new TextEncoder().encode(message)
-	return nacl.sign.detached.verify(messageBytes, signature, publicKey)
+	try {
+		return ed25519.verify(signature, messageBytes, publicKey, { zip215: false })
+	} catch {
+		// @noble/curves throws on malformed inputs (wrong length, non-canonical points);
+		// tweetnacl returned false. Preserve the boolean contract for callers.
+		return false
+	}
 }
 
 export function decodeBase58(encoded: string): Uint8Array {

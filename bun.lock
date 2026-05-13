@@ -1,5 +1,6 @@
 {
   "lockfileVersion": 1,
+  "configVersion": 0,
   "workspaces": {
     "": {
       "name": "x402-agentkit-poc",
@@ -13,9 +14,9 @@
     },
     "cli": {
       "name": "@worldcoin/agentkit-cli",
-      "version": "0.1.8",
+      "version": "0.2.0",
       "bin": {
-        "agentkit": "dist/index.js"
+        "agentkit": "dist/index.js",
       },
       "dependencies": {
         "@worldcoin/idkit-core": "2.1.0",
@@ -32,11 +33,11 @@
     },
     "core": {
       "name": "@worldcoin/agentkit-core",
-      "version": "0.1.8",
+      "version": "0.2.0",
       "dependencies": {
+        "@noble/curves": "^1.9.1",
         "@scure/base": "^1.2.6",
         "siwe": "^2.3.2",
-        "tweetnacl": "^1.0.3",
         "viem": "^2.46.2",
         "zod": "^3.24.2",
       },
@@ -47,7 +48,7 @@
     },
     "x402": {
       "name": "@worldcoin/agentkit",
-      "version": "0.1.8",
+      "version": "0.2.0",
       "dependencies": {
         "@worldcoin/agentkit-core": "^0.1.8",
         "@x402/core": "^2.4.0",
@@ -783,8 +784,6 @@
     "tsup": ["tsup@8.5.1", "", { "dependencies": { "bundle-require": "^5.1.0", "cac": "^6.7.14", "chokidar": "^4.0.3", "consola": "^3.4.0", "debug": "^4.4.0", "esbuild": "^0.27.0", "fix-dts-default-cjs-exports": "^1.0.0", "joycon": "^3.1.1", "picocolors": "^1.1.1", "postcss-load-config": "^6.0.1", "resolve-from": "^5.0.0", "rollup": "^4.34.8", "source-map": "^0.7.6", "sucrase": "^3.35.0", "tinyexec": "^0.3.2", "tinyglobby": "^0.2.11", "tree-kill": "^1.2.2" }, "peerDependencies": { "@microsoft/api-extractor": "^7.36.0", "@swc/core": "^1", "postcss": "^8.4.12", "typescript": ">=4.5.0" }, "optionalPeers": ["@microsoft/api-extractor", "@swc/core", "postcss", "typescript"], "bin": { "tsup": "dist/cli-default.js", "tsup-node": "dist/cli-node.js" } }, "sha512-xtgkqwdhpKWr3tKPmCkvYmS9xnQK3m3XgxZHwSUjvfTjp7YfXe5tT3GgWi0F2N+ZSMsOeWeZFh7ZZFg5iPhing=="],
 
     "tsx": ["tsx@4.21.0", "", { "dependencies": { "esbuild": "~0.27.0", "get-tsconfig": "^4.7.5" }, "optionalDependencies": { "fsevents": "~2.3.3" }, "bin": { "tsx": "dist/cli.mjs" } }, "sha512-5C1sg4USs1lfG0GFb2RLXsdpXqBSEhAaA/0kPL01wxzpMqLILNxIxIOKiILz+cdg/pLnOUxFYOR5yhHU666wbw=="],
-
-    "tweetnacl": ["tweetnacl@1.0.3", "", {}, "sha512-6rt+RN7aOi1nGMyC4Xa5DdYiukl2UWCbcJft7YhxReBGQD7OAM8Pbxw6YMo4r2diNEA8FEmu32YOn9rhaiE5yw=="],
 
     "type-check": ["type-check@0.4.0", "", { "dependencies": { "prelude-ls": "^1.2.1" } }, "sha512-XleUoc9uwGXqjWwXaUTZAmzMcFZ5858QA2vvx1Ur5xIcixXIP+8LnFDgRplU30us6teqdlskFfu+ae4K79Ooew=="],
 
