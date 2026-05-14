@@ -1,4 +1,4 @@
-import { SiweMessage } from 'siwe'
+import { createSiweMessage } from 'viem/siwe'
 import { getPublicClient } from './viem-client'
 import type { CompleteAgentkitInfo } from './types'
 
@@ -11,24 +11,20 @@ export function extractEVMChainId(chainId: string): number {
 }
 
 export function formatSIWEMessage(info: CompleteAgentkitInfo, address: string): string {
-	const numericChainId = extractEVMChainId(info.chainId)
-
-	const siweMessage = new SiweMessage({
+	return createSiweMessage({
 		domain: info.domain,
-		address,
+		address: address as `0x${string}`,
 		statement: info.statement,
 		uri: info.uri,
-		version: info.version,
-		chainId: numericChainId,
+		version: info.version as '1',
+		chainId: extractEVMChainId(info.chainId),
 		nonce: info.nonce,
-		issuedAt: info.issuedAt,
-		expirationTime: info.expirationTime,
-		notBefore: info.notBefore,
+		issuedAt: new Date(info.issuedAt),
+		expirationTime: info.expirationTime ? new Date(info.expirationTime) : undefined,
+		notBefore: info.notBefore ? new Date(info.notBefore) : undefined,
 		requestId: info.requestId,
 		resources: info.resources,
 	})
-
-	return siweMessage.prepareMessage()
 }
 
 /**
