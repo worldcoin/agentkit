@@ -20,11 +20,13 @@ export type {
 // Verification
 export { parseAgentkitHeader } from './parse'
 export { validateAgentkitMessage } from './validate'
-export { verifyAgentkitSignature } from './verify'
+export { resolveAgentkitSignatureRpcUrl, verifyAgentkitSignature } from './verify'
+export type { AgentkitSignatureVerificationConfig, AgentkitSignatureVerificationOptions } from './verify'
 export { buildAgentkitSchema } from './schema'
 
 // Chain utilities - EVM
 export { formatSIWEMessage, verifyEVMSignature, extractEVMChainId } from './evm'
+export { getDefaultPublicRpcUrl } from './viem-client'
 
 // Chain utilities - Solana
 export {

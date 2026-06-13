@@ -228,15 +228,22 @@ The client pays the discounted price. Payment verification fails (amount too low
 
 Signature verification automatically handles both smart contract wallets (ERC-1271) and EOA wallets (ecrecover). Smart wallets like Safe, Coinbase Smart Wallet, and CDP wallets work out of the box with no additional configuration. A public client is created internally from the chain ID to make the on-chain `isValidSignature` call when needed.
 
-To use a custom RPC endpoint instead of the chain's default public RPC:
+ERC-1271 verification uses the `chainId` in the signed AgentKit payload. This is separate from AgentBook lookup, which still resolves against the canonical World Chain registry. Built-in public RPCs are used by default for Base, World Chain, Tempo, and Arc, so most integrations do not need RPC configuration for those signing chains.
+
+To accept smart-account signatures from contracts deployed on chains other than World Chain, advertise those signing chains in `declareAgentkit({ network: ... })`. If you need private or higher-quota RPC endpoints, override them per chain:
 
 ```typescript
 const hooks = createAgentkitHooks({
 	agentBook,
 	mode: { type: 'free' },
-	rpcUrl: 'https://your-rpc-endpoint.com',
+	rpcUrls: {
+		'eip155:480': 'https://your-world-chain-rpc.example',
+		'eip155:8453': 'https://your-base-rpc.example',
+	},
 })
 ```
+
+`rpcUrl` is still supported as a fallback RPC for EVM signature verification, but `rpcUrls` is preferred when multiple signing chains are accepted.
 
 ### Custom AgentBook Configuration
 
@@ -391,7 +398,8 @@ Creates hooks for `x402HTTPResourceServer` and optionally `x402ResourceServer`.
 | `agentBook` | `AgentBookVerifier`                  | AgentBook verifier instance (required).                                                        |
 | `mode`      | `AgentkitMode`                       | Access mode (default: `{ type: "free" }`).                                                     |
 | `storage`   | `AgentKitStorage`                    | Storage for usage tracking (required for `free-trial` and `discount`).                         |
-| `rpcUrl`    | `string`                             | Custom RPC URL for EVM signature verification. Uses the chain's default public RPC if omitted. |
+| `rpcUrl`    | `string`                             | Fallback custom RPC URL for EVM signature verification. Uses the signed chain's default public RPC if omitted. |
+| `rpcUrls`   | `Record<string, string>`             | Custom EVM signature-verification RPC URLs keyed by signed CAIP-2 chain ID, e.g. `{ "eip155:8453": "https://..." }`. |
 | `onEvent`   | `(event: AgentkitHookEvent) => void` | Callback for logging/debugging.                                                                |
 
 **Returns:**
@@ -452,9 +460,10 @@ Returns `{ valid: boolean; error?: string }`.
 
 Verifies the cryptographic signature and recovers the signer address. EVM verification uses ERC-1271 (smart wallets) with ecrecover fallback (EOA) automatically.
 
-| Option   | Type     | Description                                                                                    |
-| -------- | -------- | ---------------------------------------------------------------------------------------------- |
-| `rpcUrl` | `string` | Custom RPC URL for EVM signature verification. Uses the chain's default public RPC if omitted. |
+| Option    | Type                     | Description                                                                                    |
+| --------- | ------------------------ | ---------------------------------------------------------------------------------------------- |
+| `rpcUrl`  | `string`                 | Fallback custom RPC URL for EVM signature verification. Uses the signed chain's default public RPC if omitted. |
+| `rpcUrls` | `Record<string, string>` | Custom EVM signature-verification RPC URLs keyed by signed CAIP-2 chain ID.                    |
 
 Returns `{ valid: boolean; address?: string; error?: string }`.
 
