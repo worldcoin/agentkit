@@ -37,4 +37,5 @@ ignore = [
   "RUSTSEC-2025-0055", # `tracing-subscriber` < 0.3.20, requires bumps on `semaphore-rs` (and Ark deps) (2025-09-09)
   "RUSTSEC-2025-0141", # Unmaintained `bincode`, feature complete for now (2026-01-15)
   "RUSTSEC-2025-0057", # Unmaintained `fxhash` (2025-09-05)
+  "RUSTSEC-2026-0173", # Unmaintained `proc-macro-error2`, build-time dep via alloy-sol-macro (2026-06-16)
 ]
