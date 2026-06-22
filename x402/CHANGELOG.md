@@ -1,5 +1,13 @@
 # @worldcoin/agentkit
 
+## 0.2.1
+
+### Patch Changes
+
+- 2af1db4: Allow EVM smart-account signature verification to use built-in public RPCs for common signing chains and select custom RPC endpoints from the signed payload chain ID.
+- Updated dependencies [2af1db4]
+    - @worldcoin/agentkit-core@0.2.1
+
 ## 0.2.0
 
 ### Minor Changes
