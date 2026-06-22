@@ -1,7 +1,12 @@
 import type { AgentkitMode } from './types'
 import type { AgentKitStorage } from './storage'
-import type { AgentBookVerifier } from '@worldcoin/agentkit-core'
-import { AGENTKIT, parseAgentkitHeader, verifyAgentkitSignature, validateAgentkitMessage } from '@worldcoin/agentkit-core'
+import type { AgentBookVerifier, AgentkitSignatureVerificationOptions } from '@worldcoin/agentkit-core'
+import {
+	AGENTKIT,
+	parseAgentkitHeader,
+	verifyAgentkitSignature,
+	validateAgentkitMessage,
+} from '@worldcoin/agentkit-core'
 
 export type AgentkitHookEvent =
 	| { type: 'agent_verified'; resource: string; address: string; humanId: string }
@@ -14,8 +19,10 @@ export interface CreateAgentkitHooksOptions {
 	agentBook: AgentBookVerifier
 	mode?: AgentkitMode
 	storage?: AgentKitStorage
-	/** Custom RPC URL for EVM signature verification. Uses the chain's default public RPC if omitted. */
+	/** Fallback custom RPC URL for EVM signature verification. Uses the signed chain's default public RPC if omitted. */
 	rpcUrl?: string
+	/** Custom EVM signature-verification RPC URLs keyed by CAIP-2 chain ID. */
+	rpcUrls?: Record<string, string>
 	onEvent?: (event: AgentkitHookEvent) => void
 }
 
@@ -66,7 +73,11 @@ export function createAgentkitHooks(options: CreateAgentkitHooksOptions) {
 				return
 			}
 
-			const verification = await verifyAgentkitSignature(payload, options.rpcUrl)
+			const verificationOptions: AgentkitSignatureVerificationOptions = {
+				rpcUrl: options.rpcUrl,
+				rpcUrls: options.rpcUrls,
+			}
+			const verification = await verifyAgentkitSignature(payload, verificationOptions)
 			if (!verification.valid || !verification.address) {
 				onEvent?.({ type: 'validation_failed', resource: context.path, error: verification.error })
 				return

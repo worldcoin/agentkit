@@ -2,10 +2,30 @@ import { formatSIWEMessage, verifyEVMSignature } from './evm'
 import { formatSIWSMessage, verifySolanaSignature, decodeBase58 } from './solana'
 import type { AgentkitPayload, AgentkitVerifyResult } from './types'
 
-export async function verifyAgentkitSignature(payload: AgentkitPayload, rpcUrl?: string): Promise<AgentkitVerifyResult> {
+export interface AgentkitSignatureVerificationOptions {
+	/** Fallback custom RPC URL for EVM signature verification. */
+	rpcUrl?: string
+	/** Custom RPC URLs keyed by CAIP-2 chain ID, e.g. { 'eip155:8453': 'https://base.example' }. */
+	rpcUrls?: Record<string, string>
+}
+
+export type AgentkitSignatureVerificationConfig = string | AgentkitSignatureVerificationOptions
+
+export function resolveAgentkitSignatureRpcUrl(
+	chainId: string,
+	options?: AgentkitSignatureVerificationConfig
+): string | undefined {
+	if (typeof options === 'string') return options
+	return options?.rpcUrls?.[chainId] ?? options?.rpcUrl
+}
+
+export async function verifyAgentkitSignature(
+	payload: AgentkitPayload,
+	options?: AgentkitSignatureVerificationConfig
+): Promise<AgentkitVerifyResult> {
 	try {
 		if (payload.chainId.startsWith('eip155:')) {
-			return verifyEVMPayload(payload, rpcUrl)
+			return verifyEVMPayload(payload, options)
 		}
 
 		if (payload.chainId.startsWith('solana:')) {
@@ -24,7 +44,10 @@ export async function verifyAgentkitSignature(payload: AgentkitPayload, rpcUrl?:
 	}
 }
 
-async function verifyEVMPayload(payload: AgentkitPayload, rpcUrl?: string): Promise<AgentkitVerifyResult> {
+async function verifyEVMPayload(
+	payload: AgentkitPayload,
+	options?: AgentkitSignatureVerificationConfig
+): Promise<AgentkitVerifyResult> {
 	const message = formatSIWEMessage(
 		{
 			domain: payload.domain,
@@ -44,6 +67,7 @@ async function verifyEVMPayload(payload: AgentkitPayload, rpcUrl?: string): Prom
 	)
 
 	try {
+		const rpcUrl = resolveAgentkitSignatureRpcUrl(payload.chainId, options)
 		const valid = await verifyEVMSignature(message, payload.address, payload.signature, payload.chainId, rpcUrl)
 
 		if (!valid) {
