@@ -45,6 +45,41 @@ function createAdapter(url: string, header: string) {
 }
 
 describe('createAgentkitHooks', () => {
+	it('atomically consumes a nonce so concurrent replays grant access once', async () => {
+		const request = await createSignedRequest()
+		const consumedNonces = new Set<string>()
+		let usageCount = 0
+		const events: Array<Record<string, string>> = []
+		const storage: AgentKitStorage = {
+			async tryIncrementUsage() {
+				usageCount += 1
+				return true
+			},
+			async consumeNonce(nonce) {
+				if (consumedNonces.has(nonce)) return false
+				consumedNonces.add(nonce)
+				return true
+			},
+		}
+
+		const hooks = createAgentkitHooks({
+			agentBook: { lookupHuman: async () => 'human-1' },
+			mode: { type: 'free-trial', uses: 3 },
+			storage,
+			onEvent: event => events.push(event as Record<string, string>),
+		})
+
+		const context = {
+			adapter: createAdapter(request.url, request.header),
+			path: request.path,
+		}
+		const results = await Promise.all([hooks.requestHook(context), hooks.requestHook(context)])
+
+		expect(results.filter(result => result?.grantAccess)).toHaveLength(1)
+		expect(usageCount).toBe(1)
+		expect(events.filter(event => event.type === 'validation_failed')).toHaveLength(1)
+	})
+
 	it('uses tryIncrementUsage to grant free-trial access', async () => {
 		const request = await createSignedRequest()
 		const usageCalls: Array<{ endpoint: string; humanId: string; limit: number }> = []

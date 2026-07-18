@@ -436,10 +436,28 @@ Storage interface for tracking per-human usage counts.
 | Method                                        | Description                                                                                                   |
 | --------------------------------------------- | ------------------------------------------------------------------------------------------------------------- |
 | `tryIncrementUsage(endpoint, humanId, limit)` | Atomically increment usage if below `limit`. Returns `true` if incremented, `false` if limit already reached. |
-| `hasUsedNonce?(nonce)`                        | Optional: check for replay attacks.                                                                           |
-| `recordNonce?(nonce)`                         | Optional: record a used nonce.                                                                                |
+| `consumeNonce?(nonce, expiresAt)`             | Optional: atomically record an unseen nonce. Return `false` for a replay.                                     |
+| `hasUsedNonce?(nonce)`                        | Deprecated compatibility check. Implement `consumeNonce` for atomic replay protection.                        |
+| `recordNonce?(nonce)`                         | Deprecated compatibility recorder. Implement `consumeNonce` for atomic replay protection.                     |
 
-`InMemoryAgentKitStorage` is the reference in-memory implementation. For production, implement `AgentKitStorage` with a persistent backend (e.g. using a database transaction with row-level locking).
+`InMemoryAgentKitStorage` is the reference in-memory implementation. For production, implement `AgentKitStorage` with a persistent backend. `consumeNonce` must perform its check and insert atomically (for example with a unique database constraint or an atomic cache `SET NX`) and should expire the record at `expiresAt`.
+
+For example, a PostgreSQL implementation can use a unique nonce column and `INSERT ... ON CONFLICT DO NOTHING` in one statement:
+
+```typescript
+async consumeNonce(nonce: string, expiresAt: Date): Promise<boolean> {
+	const result = await db.query(
+		`INSERT INTO agentkit_nonces (nonce, expires_at)
+		 VALUES ($1, $2)
+		 ON CONFLICT (nonce) DO NOTHING
+		 RETURNING nonce`,
+		[nonce, expiresAt]
+	)
+	return result.rowCount === 1
+}
+```
+
+Expired rows can be removed asynchronously; they must not be removed before their stored `expires_at` value.
 
 ### `parseAgentkitHeader(header)`
 
