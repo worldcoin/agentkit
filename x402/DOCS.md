@@ -448,7 +448,8 @@ For example, a PostgreSQL implementation can use a unique nonce column and `INSE
 async consumeNonce(nonce: string, expiresAt: Date): Promise<boolean> {
 	const result = await db.query(
 		`INSERT INTO agentkit_nonces (nonce, expires_at)
-		 VALUES ($1, $2)
+		 SELECT $1, $2
+		 WHERE $2::timestamptz > clock_timestamp()
 		 ON CONFLICT (nonce) DO NOTHING
 		 RETURNING nonce`,
 		[nonce, expiresAt]
@@ -457,7 +458,7 @@ async consumeNonce(nonce: string, expiresAt: Date): Promise<boolean> {
 }
 ```
 
-Expired rows can be removed asynchronously; they must not be removed before their stored `expires_at` value.
+The expiry check uses the database clock in the same atomic statement, so a delayed request returns `false` even if cleanup has already removed the nonce. Expired rows can be removed asynchronously; they must not be removed before their stored `expires_at` value.
 
 ### `parseAgentkitHeader(header)`
 
