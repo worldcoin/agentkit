@@ -63,7 +63,11 @@ export function createAgentkitHooks(options: CreateAgentkitHooksOptions) {
 			const payload = parseAgentkitHeader(header)
 			const resourceUri = context.adapter.getUrl()
 
-			const validation = await validateAgentkitMessage(payload, resourceUri)
+			const checkNonce = storage?.hasUsedNonce
+				? async (nonce: string) => !(await storage.hasUsedNonce!(nonce))
+				: undefined
+
+			const validation = await validateAgentkitMessage(payload, resourceUri, { checkNonce })
 			if (!validation.valid) {
 				onEvent?.({ type: 'validation_failed', resource: context.path, error: validation.error })
 				return
@@ -89,19 +93,9 @@ export function createAgentkitHooks(options: CreateAgentkitHooksOptions) {
 					})
 					return
 				}
-			} else if (storage?.hasUsedNonce) {
+			} else {
 				// Backwards-compatible path for existing storage implementations.
 				// This cannot guarantee atomic replay protection; implement consumeNonce instead.
-				if (await storage.hasUsedNonce(payload.nonce)) {
-					onEvent?.({
-						type: 'validation_failed',
-						resource: context.path,
-						error: 'Nonce validation failed (possible replay attack)',
-					})
-					return
-				}
-				await storage.recordNonce?.(payload.nonce)
-			} else {
 				await storage?.recordNonce?.(payload.nonce)
 			}
 
