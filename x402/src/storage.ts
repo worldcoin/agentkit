@@ -13,6 +13,7 @@ export interface AgentKitStorage {
 	 * Returns `true` when the nonce was recorded and `false` when it is a replay.
 	 *
 	 * Implementations MUST perform the check and insert as one atomic operation.
+	 * They MUST also reject records whose validity window has already ended.
 	 * `expiresAt` is the end of the challenge validity window and can be used as
 	 * the row or cache TTL.
 	 */
@@ -39,6 +40,7 @@ export class InMemoryAgentKitStorage implements AgentKitStorage {
 	async consumeNonce(nonce: string, expiresAt: Date): Promise<boolean> {
 		const now = Date.now()
 		this.pruneExpiredNonces(now)
+		if (expiresAt.getTime() <= now) return false
 		if (this.nonces.has(nonce)) return false
 		this.nonces.set(nonce, expiresAt.getTime())
 		return true

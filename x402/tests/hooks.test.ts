@@ -33,7 +33,10 @@ async function createSignedRequest(url = 'https://agentkit.example/protected') {
 	}
 }
 
-function createSmartWalletRequest(url = 'https://agentkit.example/protected') {
+function createSmartWalletRequest(
+	url = 'https://agentkit.example/protected',
+	overrides: Partial<AgentkitPayload> = {}
+) {
 	const payload: AgentkitPayload = {
 		domain: new URL(url).hostname,
 		address: '0x1111111111111111111111111111111111111111',
@@ -44,6 +47,7 @@ function createSmartWalletRequest(url = 'https://agentkit.example/protected') {
 		nonce: 'nonce1234',
 		issuedAt: new Date().toISOString(),
 		signature: '0x1234',
+		...overrides,
 	}
 
 	return {
@@ -158,6 +162,74 @@ describe('createAgentkitHooks', () => {
 				},
 			])
 		} finally {
+			rpcServer.stop(true)
+		}
+	})
+
+	it('rejects a nonce that expires during smart-wallet signature verification', async () => {
+		const originalDateNow = Date.now
+		const issuedAt = originalDateNow()
+		const maxAgeMs = 5 * 60 * 1000
+		let currentTime = issuedAt + maxAgeMs - 1
+		const request = createSmartWalletRequest('https://agentkit.example/protected', {
+			issuedAt: new Date(issuedAt).toISOString(),
+		})
+		let rpcCalls = 0
+		const rpcServer = Bun.serve({
+			hostname: '127.0.0.1',
+			port: 0,
+			async fetch(rpcRequest) {
+				rpcCalls += 1
+				currentTime = issuedAt + maxAgeMs
+				const body = (await rpcRequest.json()) as { id: number }
+				return Response.json({ jsonrpc: '2.0', id: body.id, result: '0x01' })
+			},
+		})
+		let consumeCalls = 0
+		let lookupCalls = 0
+		const events: Array<Record<string, string>> = []
+		const storage: AgentKitStorage = {
+			async tryIncrementUsage() {
+				return true
+			},
+			async consumeNonce() {
+				consumeCalls += 1
+				return true
+			},
+		}
+
+		Date.now = () => currentTime
+		try {
+			const hooks = createAgentkitHooks({
+				agentBook: {
+					async lookupHuman() {
+						lookupCalls += 1
+						return 'human-1'
+					},
+				},
+				storage,
+				rpcUrl: rpcServer.url.toString(),
+				onEvent: event => events.push(event as Record<string, string>),
+			})
+
+			const result = await hooks.requestHook({
+				adapter: createAdapter(request.url, request.header),
+				path: request.path,
+			})
+
+			expect(result).toBeUndefined()
+			expect(rpcCalls).toBe(1)
+			expect(consumeCalls).toBe(0)
+			expect(lookupCalls).toBe(0)
+			expect(events).toEqual([
+				{
+					type: 'validation_failed',
+					resource: request.path,
+					error: 'Message expired',
+				},
+			])
+		} finally {
+			Date.now = originalDateNow
 			rpcServer.stop(true)
 		}
 	})

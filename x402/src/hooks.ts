@@ -83,8 +83,14 @@ export function createAgentkitHooks(options: CreateAgentkitHooksOptions) {
 				return
 			}
 
+			const nonceExpiration = getNonceExpiration(payload)
+			if (nonceExpiration.getTime() <= Date.now()) {
+				onEvent?.({ type: 'validation_failed', resource: context.path, error: 'Message expired' })
+				return
+			}
+
 			if (storage?.consumeNonce) {
-				const consumed = await storage.consumeNonce(payload.nonce, getNonceExpiration(payload))
+				const consumed = await storage.consumeNonce(payload.nonce, nonceExpiration)
 				if (!consumed) {
 					onEvent?.({
 						type: 'validation_failed',
