@@ -8,6 +8,13 @@ import { createWorldBridgeStore } from '@worldcoin/idkit-core'
 import type { ISuccessResult } from '@worldcoin/idkit-core'
 import { solidityEncode } from '@worldcoin/idkit-core/hashing'
 import qrcode from 'qrcode-terminal'
+import { loadAgentSigner, loadOrCreateAgentIdentity } from './key.js'
+import {
+	AgentkitPayloadError,
+	agentkitExtensionInputSchema,
+	createAgentkitProof,
+	parseAgentkitExtension,
+} from './prove.js'
 
 // ─── Config ──────────────────────────────────────────────────────────────────
 
@@ -32,13 +39,13 @@ const AGENT_BOOK_ABI = [
 
 const APP_ID = 'app_a7c3e2b6b83927251a0db5345bd7146a'
 const ACTION = 'agentbook-registration'
-const DEFAULT_API_URL = 'https://x402-worldchain.vercel.app'
+const REGISTRATION_RELAY_URL = 'https://x402-worldchain.vercel.app/register'
 const AGENT_BOOK_NETWORK = 'eip155:480'
 
 // ─── CLI ─────────────────────────────────────────────────────────────────────
 
 const cli = Cli.create('agentkit', {
-	description: 'Register agent wallets with World ID-verified humans via AgentBook.',
+	description: 'Register an agent with a World ID-verified human via AgentBook.',
 	version: '0.1.0',
 })
 
@@ -108,50 +115,65 @@ cli.command('status', {
 })
 
 cli.command('register', {
-	description: 'Register an agent wallet address with a World ID proof.',
-	args: z.object({
-		address: z.string().regex(/^0x[a-fA-F0-9]{40}$/, 'Invalid Ethereum address').describe('Agent wallet address'),
-	}),
-	options: z.object({
-		auto: z.boolean().default(true).describe('Submit registration to the default relay or API_URL override'),
-		manual: z.boolean().optional().describe('Print manual call data instead of submitting through a relay'),
-	}),
-	alias: { auto: 'a', manual: 'm' },
-	env: z.object({
-		API_URL: z
-			.string()
-			.optional()
-			.describe('Override API base URL for registration relay; defaults to https://x402-worldchain.vercel.app'),
-	}),
+	description: 'Register this agent with a World ID proof.',
 	outputPolicy: 'agent-only',
 	output: z.object({
-		agent: z.string(),
-		root: z.string(),
-		nonce: z.string(),
-		nullifierHash: z.string(),
-		proof: z.array(z.string()),
-		contract: z.string(),
-		txHash: z.string().optional(),
+		registered: z.boolean().describe('Whether this agent is registered'),
+		alreadyRegistered: z.boolean().describe('Whether registration was already complete before this run'),
 	}),
-	examples: [
-		{ args: { address: '0x1234567890abcdef1234567890abcdef12345678' }, description: 'Register on World Chain' },
-	],
 	async run(c) {
-		const agentAddress = c.args.address as `0x${string}`
-		const shouldAuto = c.options.manual ? false : c.options.auto
+		if (!c.agent) console.log('  Preparing this agent...')
 
-		// 1. Read next nonce from AgentBook contract
-		if (!c.agent) console.log(`  Looking up next nonce for ${agentAddress}...`)
+		let agentAddress: `0x${string}`
+		try {
+			const identity = await loadOrCreateAgentIdentity()
+			agentAddress = identity.address
+			if (!c.agent && identity.created) console.log('  \x1b[32m✓ Local identity created\x1b[0m')
+		} catch (err) {
+			return c.error({
+				code: 'IDENTITY_SETUP_FAILED',
+				message: err instanceof Error ? err.message : 'Unable to set up the local agent identity',
+			})
+		}
 
 		const client = createPublicClient({ chain: worldchain, transport: http() })
+
+		if (!c.agent) console.log('  Checking registration status...')
+
+		let existingHumanId: bigint
+		try {
+			existingHumanId = await client.readContract({
+				address: AGENT_BOOK_CONTRACT,
+				abi: AGENT_BOOK_ABI,
+				functionName: 'lookupHuman',
+				args: [agentAddress],
+			})
+		} catch (err) {
+			return c.error({
+				code: 'REGISTRATION_LOOKUP_FAILED',
+				message: err instanceof Error ? err.message : 'Unable to check registration status',
+				retryable: true,
+			})
+		}
+
+		if (existingHumanId !== 0n) {
+			if (!c.agent) {
+				console.log()
+				console.log('  \x1b[32m\x1b[1m✓ This agent is already registered\x1b[0m')
+				console.log()
+			}
+			return { registered: true, alreadyRegistered: true }
+		}
+
+		// 1. Read next nonce from AgentBook contract
+		if (!c.agent) console.log('  Starting registration...')
+
 		const nonce = await client.readContract({
 			address: AGENT_BOOK_CONTRACT,
 			abi: AGENT_BOOK_ABI,
 			functionName: 'getNextNonce',
 			args: [agentAddress],
 		})
-
-		if (!c.agent) console.log(`  Nonce: ${nonce}`)
 
 		// 2. Build the signal payload
 		const signal = solidityEncode(['address', 'uint256'], [agentAddress, nonce])
@@ -189,8 +211,6 @@ cli.command('register', {
 		if (!c.agent) {
 			console.log()
 			console.log('  \x1b[32m\x1b[1m✓ World ID verified\x1b[0m')
-			console.log(`  Merkle root:     ${completion.proof.merkle_root}`)
-			console.log(`  Nullifier hash:  ${completion.proof.nullifier_hash}`)
 		}
 
 		const proof = normalizeProof(completion.proof)
@@ -208,31 +228,12 @@ cli.command('register', {
 			contract: AGENT_BOOK_CONTRACT,
 		}
 
-		if (!shouldAuto) {
-			if (!c.agent) {
-				console.log()
-				console.log('  Submit this transaction on-chain:')
-				console.log()
-				console.log(`  Contract: ${AGENT_BOOK_CONTRACT}`)
-				console.log(
-					'  Function: register(address agent, uint256 root, uint256 nonce, uint256 nullifierHash, uint256[8] proof)'
-				)
-			}
-
-			return registration
-		}
-
-		const apiUrl = c.env.API_URL ?? DEFAULT_API_URL
-
-		const registerUrl = `${apiUrl.replace(/\/$/, '')}/register`
-
 		if (!c.agent) {
 			console.log()
-			console.log(`  Registering agent ${agentAddress}...`)
-			console.log(`  Relay: \x1b[90m${apiUrl}\x1b[0m`)
+			console.log('  Completing registration...')
 		}
 
-		const response = await fetch(registerUrl, {
+		const response = await fetch(REGISTRATION_RELAY_URL, {
 			method: 'POST',
 			headers: { 'Content-Type': 'application/json' },
 			body: JSON.stringify(registration),
@@ -243,33 +244,83 @@ cli.command('register', {
 			return c.error({ code: 'REGISTRATION_FAILED', message: `${response.status}: ${body}`, retryable: true })
 		}
 
-		const result = (await response.json()) as { txHash?: string }
-
 		if (!c.agent) {
-			const lines = [
-				'',
-				'\x1b[32m\x1b[1m✓ Agent registered on World Chain\x1b[0m',
-				'',
-				`Agent  \x1b[36m${agentAddress}\x1b[0m`,
-				...(result.txHash ? [`Tx     \x1b[90m${result.txHash}\x1b[0m`] : []),
-				'',
-			]
-
-			// Measure visible width (strip ANSI codes)
-			const strip = (s: string) => s.replace(/\x1b\[[0-9;]*m/g, '')
-			const maxWidth = Math.max(...lines.map(l => strip(l).length))
-			const pad = (s: string) => s + ' '.repeat(maxWidth - strip(s).length)
-
 			console.log()
-			console.log(`  ┌${'─'.repeat(maxWidth + 6)}┐`)
-			for (const line of lines) {
-				console.log(`  │   ${pad(line)}   │`)
-			}
-			console.log(`  └${'─'.repeat(maxWidth + 6)}┘`)
+			console.log('  \x1b[32m\x1b[1m✓ This agent is registered\x1b[0m')
 			console.log()
 		}
 
-		return { ...registration, txHash: result.txHash }
+		return { registered: true, alreadyRegistered: false }
+	},
+})
+
+cli.command('prove', {
+	description: 'Sign an x402 AgentKit challenge with this registered agent.',
+	args: z.object({
+		payload: agentkitExtensionInputSchema,
+	}),
+	output: z.object({
+		signature: z.string().describe('Base64-encoded AgentKit authorization value'),
+	}),
+	async run(c) {
+		let extension
+		try {
+			extension = parseAgentkitExtension(c.args.payload)
+		} catch (err) {
+			return c.error({
+				code: 'INVALID_AGENTKIT_PAYLOAD',
+				message: err instanceof Error ? err.message : 'Invalid AgentKit extension payload',
+			})
+		}
+
+		let signer
+		try {
+			signer = await loadAgentSigner()
+		} catch (err) {
+			const keyMissing = hasErrorCode(err, 'ENOENT')
+			return c.error({
+				code: keyMissing ? 'KEY_NOT_FOUND' : 'IDENTITY_LOAD_FAILED',
+				message: keyMissing
+					? 'No AgentKit key is available. Run `agentkit register` first.'
+					: err instanceof Error
+						? err.message
+						: 'Unable to load the local agent identity',
+			})
+		}
+
+		const client = createPublicClient({ chain: worldchain, transport: http() })
+		let humanId: bigint
+		try {
+			humanId = await client.readContract({
+				address: AGENT_BOOK_CONTRACT,
+				abi: AGENT_BOOK_ABI,
+				functionName: 'lookupHuman',
+				args: [signer.address],
+			})
+		} catch (err) {
+			return c.error({
+				code: 'REGISTRATION_LOOKUP_FAILED',
+				message: err instanceof Error ? err.message : 'Unable to check registration status',
+				retryable: true,
+			})
+		}
+
+		if (humanId === 0n) {
+			return c.error({
+				code: 'AGENT_NOT_REGISTERED',
+				message: 'This agent is not registered. Run `agentkit register` first.',
+			})
+		}
+
+		try {
+			const proof = await createAgentkitProof(extension, signer)
+			return { signature: proof.encoded }
+		} catch (err) {
+			return c.error({
+				code: err instanceof AgentkitPayloadError ? 'INVALID_AGENTKIT_PAYLOAD' : 'SIGNING_FAILED',
+				message: err instanceof Error ? err.message : 'Unable to sign the AgentKit challenge',
+			})
+		}
 	},
 })
 
@@ -283,6 +334,10 @@ type VerifyCompletion = { success: true; proof: ISuccessResult } | { success: fa
 
 function bigintToHex(value: bigint): string {
 	return `0x${value.toString(16)}`
+}
+
+function hasErrorCode(error: unknown, code: string): boolean {
+	return error instanceof Error && 'code' in error && error.code === code
 }
 
 async function waitForCompletion(
