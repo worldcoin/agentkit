@@ -1,18 +1,13 @@
 import { describe, expect, it } from 'bun:test'
+import { AGENTKIT_HEADER, normalizeAgentkitBody } from '../src/protocol'
 import { createAgentkitClient, type AgentkitSigner } from '../src/client'
-import { buildAgentkitSchema, formatSIWEMessage } from '@worldcoin/agentkit-core'
-import type { AgentkitExtension, AgentkitPayload } from '@worldcoin/agentkit-core'
 
 const CHAIN_ID = 'eip155:8453'
-const SIGNATURE = '0x1234'
-const ADDRESS = '0x1234567890AbcdEF1234567890aBcdef12345678'
+const SIGNATURE = `0x${'12'.repeat(65)}`
 
-function createEVMSigner(): AgentkitSigner & { messages: string[] } {
+function createSigner(): AgentkitSigner & { messages: string[] } {
 	const messages: string[] = []
 	return {
-		address: ADDRESS,
-		chainId: CHAIN_ID,
-		type: 'eip191',
 		messages,
 		async signMessage(message: string) {
 			messages.push(message)
@@ -21,22 +16,7 @@ function createEVMSigner(): AgentkitSigner & { messages: string[] } {
 	}
 }
 
-function createExtension(): AgentkitExtension {
-	return {
-		info: {
-			domain: 'agentkit.example',
-			uri: 'https://agentkit.example/protected',
-			version: '1',
-			nonce: 'nonce1234',
-			issuedAt: new Date().toISOString(),
-			resources: ['https://agentkit.example/protected'],
-		},
-		supportedChains: [{ chainId: CHAIN_ID, type: 'eip191' }],
-		schema: buildAgentkitSchema(),
-	}
-}
-
-function paymentRequired(extension?: AgentkitExtension) {
+function paymentRequired(agentkit = true) {
 	return {
 		x402Version: 2,
 		resource: {
@@ -55,108 +35,115 @@ function paymentRequired(extension?: AgentkitExtension) {
 				extra: {},
 			},
 		],
-		...(extension ? { extensions: { agentkit: extension } } : {}),
+		...(agentkit ? { extensions: { agentkit: { mode: { type: 'free' } } } } : {}),
 	}
 }
 
 describe('createAgentkitClient', () => {
-	it('creates a base64 AgentKit header with a signed EVM payload', async () => {
-		const signer = createEVMSigner()
-		const extension = createExtension()
+	it('creates an X-AgentKit value by signing the normalized body', async () => {
+		const signer = createSigner()
 		const agentkit = createAgentkitClient({ signer })
+		const body = { hello: 'world', unicode: '你好' }
 
-		const header = await agentkit.createHeader(extension)
-		const payload = JSON.parse(Buffer.from(header, 'base64').toString('utf8')) as AgentkitPayload
-		const message = formatSIWEMessage(payload, signer.address)
-
-		expect(payload.address).toBe(signer.address)
-		expect(payload.chainId).toBe(CHAIN_ID)
-		expect(payload.type).toBe('eip191')
-		expect(payload.nonce).toBe(extension.info.nonce)
-		expect(payload.signature).toBe(SIGNATURE)
-		expect(signer.messages).toEqual([message])
+		await expect(agentkit.createHeader(body)).resolves.toBe(SIGNATURE)
+		expect(signer.messages).toEqual([normalizeAgentkitBody(body)])
 	})
 
-	it('encodes Unicode payloads in browser btoa environments', async () => {
-		const originalBtoa = globalThis.btoa
-		globalThis.btoa = (value: string) => Buffer.from(value, 'binary').toString('base64')
+	it('preserves the JSON representation of primitive string bodies', async () => {
+		const signer = createSigner()
+		const agentkit = createAgentkitClient({
+			signer,
+			fetch: async request => {
+				const req = request instanceof Request ? request : new Request(request)
+				return req.headers.has(AGENTKIT_HEADER)
+					? new Response('ok')
+					: Response.json(paymentRequired(), { status: 402 })
+			},
+		})
 
-		try {
-			const signer = createEVMSigner()
-			const extension = createExtension()
-			const agentkit = createAgentkitClient({ signer })
-			extension.info.statement = 'Verify this human-backed agent: 你好'
+		await agentkit.fetch('https://agentkit.example/protected', {
+			method: 'POST',
+			headers: { 'Content-Type': 'application/json' },
+			body: '"hello"',
+		})
 
-			const header = await agentkit.createHeader(extension)
-			const payload = JSON.parse(Buffer.from(header, 'base64').toString('utf8')) as AgentkitPayload
-
-			expect(payload.statement).toBe(extension.info.statement)
-		} finally {
-			globalThis.btoa = originalBtoa
-		}
+		expect(signer.messages).toEqual(['"hello"'])
 	})
 
-	it('retries 402 responses with an AgentKit header when the extension is present', async () => {
-		const signer = createEVMSigner()
+	it('normalizes JSON once and retries with the exact body that was signed', async () => {
+		const signer = createSigner()
 		const events: Array<Record<string, unknown>> = []
-		const seenHeaders: string[] = []
+		const retries: Array<{ header: string | null; body: string }> = []
 		const agentkit = createAgentkitClient({
 			signer,
 			onEvent: event => events.push(event),
 			fetch: async request => {
 				const req = request instanceof Request ? request : new Request(request)
-				const header = req.headers.get('agentkit')
+				const header = req.headers.get(AGENTKIT_HEADER)
 				if (header) {
-					seenHeaders.push(header)
-					return new Response(JSON.stringify({ ok: true }), { status: 200 })
+					retries.push({ header, body: await req.text() })
+					return Response.json({ ok: true })
 				}
 
-				return new Response(JSON.stringify(paymentRequired(createExtension())), { status: 402 })
+				return Response.json(paymentRequired(), { status: 402 })
 			},
 		})
 
-		const response = await agentkit.fetch('https://agentkit.example/protected')
+		const response = await agentkit.fetch('https://agentkit.example/protected', {
+			method: 'POST',
+			headers: { 'Content-Type': 'application/json' },
+			body: '{\n  "hello": "world",\n  "count": 2\n}',
+		})
 
 		expect(response.status).toBe(200)
-		expect(seenHeaders).toHaveLength(1)
-		expect(events.map(event => event.type)).toEqual(['agentkit_detected', 'agentkit_signed', 'agentkit_retry_completed'])
+		expect(signer.messages).toEqual(['{"hello":"world","count":2}'])
+		expect(retries).toEqual([{ header: SIGNATURE, body: '{"hello":"world","count":2}' }])
+		expect(events.map(event => event.type)).toEqual([
+			'agentkit_detected',
+			'agentkit_signed',
+			'agentkit_retry_completed',
+		])
+	})
+
+	it('signs an empty body for bodyless requests', async () => {
+		const signer = createSigner()
+		const agentkit = createAgentkitClient({
+			signer,
+			fetch: async request => {
+				const req = request instanceof Request ? request : new Request(request)
+				return req.headers.has(AGENTKIT_HEADER)
+					? new Response('ok')
+					: Response.json(paymentRequired(), { status: 402 })
+			},
+		})
+
+		await expect(agentkit.fetch('https://agentkit.example/protected')).resolves.toHaveProperty('status', 200)
+		expect(signer.messages).toEqual([''])
 	})
 
 	it('returns successful non-402 responses unchanged', async () => {
-		const signer = createEVMSigner()
 		const original = new Response('ok', { status: 200 })
-		const agentkit = createAgentkitClient({
-			signer,
-			fetch: async () => original,
-		})
+		const agentkit = createAgentkitClient({ signer: createSigner(), fetch: async () => original })
 
 		await expect(agentkit.fetch('https://agentkit.example/open')).resolves.toBe(original)
 	})
 
 	it('returns 402 responses without AgentKit unchanged', async () => {
-		const signer = createEVMSigner()
-		const original = new Response(JSON.stringify(paymentRequired()), { status: 402 })
-		const agentkit = createAgentkitClient({
-			signer,
-			fetch: async () => original,
-		})
+		const original = Response.json(paymentRequired(false), { status: 402 })
+		const agentkit = createAgentkitClient({ signer: createSigner(), fetch: async () => original })
 
 		await expect(agentkit.fetch('https://agentkit.example/protected')).resolves.toBe(original)
 	})
 
-	it('returns the original 402 and emits a skip event when the signer is unsupported', async () => {
-		const signer: AgentkitSigner = {
-			address: '0x1234567890abcdef1234567890abcdef12345678',
-			chainId: 'eip155:1',
-			type: 'eip191',
-			async signMessage() {
-				throw new Error('should not sign')
-			},
-		}
+	it('returns the original 402 and emits a skip event when signing fails', async () => {
 		const events: Array<Record<string, unknown>> = []
-		const original = new Response(JSON.stringify(paymentRequired(createExtension())), { status: 402 })
+		const original = Response.json(paymentRequired(), { status: 402 })
 		const agentkit = createAgentkitClient({
-			signer,
+			signer: {
+				async signMessage() {
+					throw new Error('signer unavailable')
+				},
+			},
 			onEvent: event => events.push(event),
 			fetch: async () => original,
 		})

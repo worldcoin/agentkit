@@ -1,52 +1,60 @@
+import type { Hex } from 'viem'
 import { describe, expect, it } from 'bun:test'
-import { generatePrivateKey, privateKeyToAccount } from 'viem/accounts'
-import { createAgentkitHooks } from '../src/hooks'
-import type { AgentkitPayload } from '@worldcoin/agentkit-core'
+import { AGENTKIT_HEADER } from '../src/protocol'
 import type { AgentKitStorage } from '../src/storage'
-import { formatSIWEMessage } from '@worldcoin/agentkit-core'
+import { createAgentkitHooksInternal } from '../src/hooks'
 
-const CHAIN_ID = 'eip155:8453'
+const ADDRESS = '0x1234567890abcdef1234567890abcdef12345678'
+const SIGNATURE = `0x${'12'.repeat(65)}`
+const URL = 'https://agentkit.example/protected'
 
-async function createSignedRequest(url = 'https://agentkit.example/protected') {
-	const account = privateKeyToAccount(generatePrivateKey())
-	const address = account.address
-	const unsignedPayload = {
-		domain: new URL(url).hostname,
-		address,
-		uri: url,
-		version: '1',
-		chainId: CHAIN_ID,
-		type: 'eip191',
-		nonce: 'nonce1234',
-		issuedAt: new Date().toISOString(),
-	} satisfies Omit<AgentkitPayload, 'signature'>
-
-	const message = formatSIWEMessage(unsignedPayload, address)
-	const signature = await account.signMessage({ message })
-	const payload: AgentkitPayload = { ...unsignedPayload, signature }
-
+function createAdapter(body: unknown = { hello: 'world' }, header = SIGNATURE, contentType?: string) {
 	return {
-		address,
-		header: Buffer.from(JSON.stringify(payload)).toString('base64'),
-		path: new URL(url).pathname,
-		url,
+		getHeader(name: string) {
+			if (name.toLowerCase() === AGENTKIT_HEADER.toLowerCase()) return header
+			if (name.toLowerCase() === 'content-type') return contentType
+			return undefined
+		},
+		getUrl() {
+			return URL
+		},
+		getBody() {
+			return body
+		},
 	}
 }
 
-function createAdapter(url: string, header: string) {
-	return {
-		getHeader(name: string) {
-			return name.toLowerCase() === 'agentkit' ? header : undefined
-		},
-		getUrl() {
-			return url
-		},
-	}
+const dependencies = {
+	verify: async () => 'human-1',
+	recoverAddress: async (_body: Uint8Array, _signature: Hex) => ADDRESS,
 }
 
 describe('createAgentkitHooks', () => {
-	it('uses tryIncrementUsage to grant free-trial access', async () => {
-		const request = await createSignedRequest()
+	it('passes the normalized adapter body and X-AgentKit header to core verify', async () => {
+		const requests: Request[] = []
+		const hooks = createAgentkitHooksInternal(
+			{},
+			{
+				...dependencies,
+				verify: async request => {
+					requests.push(request)
+					return 'human-1'
+				},
+			}
+		)
+
+		await expect(
+			hooks.requestHook({
+				adapter: createAdapter({ hello: 'world' }, SIGNATURE, 'application/json'),
+				path: '/protected',
+			})
+		).resolves.toEqual({ grantAccess: true })
+		expect(requests).toHaveLength(1)
+		expect(requests[0]!.headers.get(AGENTKIT_HEADER)).toBe(SIGNATURE)
+		expect(await requests[0]!.text()).toBe('{"hello":"world"}')
+	})
+
+	it('uses the nullifier hash to grant free-trial access', async () => {
 		const usageCalls: Array<{ endpoint: string; humanId: string; limit: number }> = []
 		const events: Array<Record<string, string>> = []
 		const storage: AgentKitStorage = {
@@ -56,32 +64,30 @@ describe('createAgentkitHooks', () => {
 			},
 		}
 
-		const hooks = createAgentkitHooks({
-			agentBook: { lookupHuman: async () => 'human-1' },
-			mode: { type: 'free-trial', uses: 3 },
-			storage,
-			onEvent: event => events.push(event as Record<string, string>),
-		})
+		const hooks = createAgentkitHooksInternal(
+			{
+				mode: { type: 'free-trial', uses: 3 },
+				storage,
+				onEvent: event => events.push(event as Record<string, string>),
+			},
+			dependencies
+		)
 
-		const result = await hooks.requestHook({
-			adapter: createAdapter(request.url, request.header),
-			path: request.path,
-		})
+		const result = await hooks.requestHook({ adapter: createAdapter(), path: '/protected' })
 
 		expect(result).toEqual({ grantAccess: true })
-		expect(usageCalls).toEqual([{ endpoint: request.path, humanId: 'human-1', limit: 3 }])
+		expect(usageCalls).toEqual([{ endpoint: '/protected', humanId: 'human-1', limit: 3 }])
 		expect(events).toEqual([
 			{
 				type: 'agent_verified',
-				resource: request.path,
-				address: request.address,
+				resource: '/protected',
+				address: ADDRESS,
 				humanId: 'human-1',
 			},
 		])
 	})
 
-	it('uses tryIncrementUsage to recover discounted underpayments', async () => {
-		const request = await createSignedRequest()
+	it('uses the nullifier hash to recover discounted underpayments', async () => {
 		const usageCalls: Array<{ endpoint: string; humanId: string; limit: number }> = []
 		const events: Array<Record<string, string>> = []
 		const storage: AgentKitStorage = {
@@ -91,46 +97,56 @@ describe('createAgentkitHooks', () => {
 			},
 		}
 
-		const hooks = createAgentkitHooks({
-			agentBook: { lookupHuman: async () => 'human-1' },
-			mode: { type: 'discount', percent: 50, uses: 2 },
-			storage,
-			onEvent: event => events.push(event as Record<string, string>),
-		})
+		const hooks = createAgentkitHooksInternal(
+			{
+				mode: { type: 'discount', percent: 50, uses: 2 },
+				storage,
+				onEvent: event => events.push(event as Record<string, string>),
+			},
+			dependencies
+		)
 
-		const requestResult = await hooks.requestHook({
-			adapter: createAdapter(request.url, request.header),
-			path: request.path,
-		})
+		const requestResult = await hooks.requestHook({ adapter: createAdapter(), path: '/protected' })
 		const requirements = { amount: '100' }
 		const verifyResult = await hooks.verifyFailureHook?.({
 			paymentPayload: {
-				resource: { url: request.url },
-				payload: {
-					authorization: {
-						from: request.address,
-						value: '50',
-					},
-				},
+				resource: { url: URL },
+				payload: { authorization: { from: ADDRESS, value: '50' } },
 			},
 			requirements,
 			error: new Error('invalid_exact_evm_payload_authorization_value: discounted payment'),
 		})
 
 		expect(requestResult).toBeUndefined()
-		expect(verifyResult).toEqual({
-			recovered: true,
-			result: { isValid: true, payer: request.address },
-		})
+		expect(verifyResult).toEqual({ recovered: true, result: { isValid: true, payer: ADDRESS } })
 		expect(requirements.amount).toBe('50')
-		expect(usageCalls).toEqual([{ endpoint: request.path, humanId: 'human-1', limit: 2 }])
+		expect(usageCalls).toEqual([{ endpoint: '/protected', humanId: 'human-1', limit: 2 }])
 		expect(events).toEqual([
 			{
 				type: 'discount_applied',
-				resource: request.path,
-				address: request.address,
+				resource: '/protected',
+				address: ADDRESS,
 				humanId: 'human-1',
 			},
 		])
+	})
+
+	it('reports an unregistered signer separately from a malformed signature', async () => {
+		const events: Array<Record<string, string>> = []
+		const hooks = createAgentkitHooksInternal(
+			{ onEvent: event => events.push(event as Record<string, string>) },
+			{
+				...dependencies,
+				verify: async () => {
+					throw Object.assign(new Error('Agent is not registered in AgentBook'), {
+						code: 'AGENT_NOT_REGISTERED',
+						address: ADDRESS,
+					})
+				},
+			}
+		)
+
+		await hooks.requestHook({ adapter: createAdapter(), path: '/protected' })
+		expect(events).toEqual([{ type: 'agent_not_verified', resource: '/protected', address: ADDRESS }])
 	})
 })

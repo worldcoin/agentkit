@@ -26,14 +26,18 @@ Keep this file private and back it up. It is the durable identity for this agent
 
 Full registration guide: [REGISTRATION.md](./REGISTRATION.md)
 
-## Prove this agent is registered
+## Sign a request as this agent
 
-Pass the `agentkit` extension from an x402 response as JSON:
+Pass the exact UTF-8 request body to `prove`:
 
 ```bash
-agentkit prove '{"agentkit":{"info":{"domain":"api.example.com","uri":"https://api.example.com/data","version":"1","nonce":"abc123","issuedAt":"2025-01-01T00:00:00.000Z","statement":"Verify your agent is backed by a real human"},"supportedChains":[{"chainId":"eip155:8453","type":"eip191"}],"schema":{}}}'
+agentkit prove '{"query":"weather","city":"Lisbon"}'
 ```
 
-The command requires the local key created by `agentkit register` and confirms that its derived address is registered before signing. It selects the first supported EVM `eip191` chain, constructs the documented SIWE message, and returns a `signature` field containing the complete base64 value for the `agentkit` HTTP header.
+For a request with no body, pass an empty string:
 
-The encoded value contains the public challenge response and EIP-191 signature. The private key remains in the local key file.
+```bash
+agentkit prove ''
+```
+
+The command requires the key created by `agentkit register` and confirms that its address is registered before signing. It returns a `signature` field containing the hexadecimal value for the `X-AgentKit` request header. The retried request body must exactly match the body passed to `prove`.

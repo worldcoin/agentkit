@@ -54,12 +54,12 @@ Run `agentkit register` again and complete the World App step within five minute
 
 Check the network connection and retry. The command checks registration before starting a new verification, so it is safe to rerun after an uncertain response.
 
-## Prove registration to an x402 service
+## Sign an x402 request body
 
-After registration, pass an x402 AgentKit extension to `prove` as JSON:
+After registration, pass the exact UTF-8 request body to `prove`:
 
 ```bash
-agentkit prove '<agentkit-extension-json>'
+agentkit prove '<exact-request-body>'
 ```
 
-The command does not create a missing key and will not sign for an unregistered identity. On success, its `signature` result is the base64-encoded AgentKit authorization value to send in the `agentkit` HTTP header.
+Use `agentkit prove ''` for a request with no body. The command does not create a missing key and will not sign for an unregistered identity. On success, send its hexadecimal `signature` result in the `X-AgentKit` header and retry with the exact same body.

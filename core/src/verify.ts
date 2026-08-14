@@ -1,137 +1,53 @@
-import { formatSIWEMessage, verifyEVMSignature } from './evm'
-import { formatSIWSMessage, verifySolanaSignature, decodeBase58 } from './solana'
-import type { AgentkitPayload, AgentkitVerifyResult } from './types'
+import { isHex, recoverMessageAddress, type Hex } from 'viem'
+import { lookupNullifierHash } from './agent-book'
 
-export interface AgentkitSignatureVerificationOptions {
-	/** Fallback custom RPC URL for EVM signature verification. */
-	rpcUrl?: string
-	/** Custom RPC URLs keyed by CAIP-2 chain ID, e.g. { 'eip155:8453': 'https://base.example' }. */
-	rpcUrls?: Record<string, string>
+const AGENTKIT_HEADER = 'X-AgentKit'
+
+type VerifyRequestDependencies = {
+	recoverAddress?: (body: Uint8Array, signature: Hex) => Promise<string>
+	lookupNullifierHash?: (address: string) => Promise<string | null>
 }
 
-export type AgentkitSignatureVerificationConfig = string | AgentkitSignatureVerificationOptions
-
-export function resolveAgentkitSignatureRpcUrl(
-	chainId: string,
-	options?: AgentkitSignatureVerificationConfig
-): string | undefined {
-	if (typeof options === 'string') return options
-	return options?.rpcUrls?.[chainId] ?? options?.rpcUrl
+export async function verify(request: Request): Promise<string> {
+	return verifyRequest(request)
 }
 
-export async function verifyAgentkitSignature(
-	payload: AgentkitPayload,
-	options?: AgentkitSignatureVerificationConfig
-): Promise<AgentkitVerifyResult> {
+export async function verifyRequest(request: Request, dependencies: VerifyRequestDependencies = {}): Promise<string> {
+	const signature = request.headers.get(AGENTKIT_HEADER)?.trim()
+	if (!signature) {
+		throw verificationError('Missing X-AgentKit header', 'MISSING_HEADER')
+	}
+	if (!isHex(signature) || !/^0x[0-9a-fA-F]{130}$/.test(signature)) {
+		throw verificationError('Invalid X-AgentKit signature', 'INVALID_SIGNATURE')
+	}
+
+	let body: Uint8Array
 	try {
-		if (payload.chainId.startsWith('eip155:')) {
-			return verifyEVMPayload(payload, options)
-		}
-
-		if (payload.chainId.startsWith('solana:')) {
-			return verifySolanaPayload(payload)
-		}
-
-		return {
-			valid: false,
-			error: `Unsupported chain namespace: ${payload.chainId}. Supported: eip155:* (EVM), solana:* (Solana)`,
-		}
-	} catch (error) {
-		return {
-			valid: false,
-			error: error instanceof Error ? error.message : 'Verification failed',
-		}
+		body = new Uint8Array(await request.clone().arrayBuffer())
+	} catch {
+		throw verificationError('Unable to read request body', 'INVALID_REQUEST_BODY')
 	}
+
+	const recoverAddress =
+		dependencies.recoverAddress ??
+		((message: Uint8Array, value: Hex) => recoverMessageAddress({ message: { raw: message }, signature: value }))
+
+	let address: string
+	try {
+		address = await recoverAddress(body, signature)
+	} catch {
+		throw verificationError('Invalid X-AgentKit signature', 'INVALID_SIGNATURE')
+	}
+
+	const lookup = dependencies.lookupNullifierHash ?? (signer => lookupNullifierHash(signer))
+	const nullifierHash = await lookup(address)
+	if (!nullifierHash) {
+		throw verificationError('Agent is not registered in AgentBook', 'AGENT_NOT_REGISTERED', address)
+	}
+
+	return nullifierHash
 }
 
-async function verifyEVMPayload(
-	payload: AgentkitPayload,
-	options?: AgentkitSignatureVerificationConfig
-): Promise<AgentkitVerifyResult> {
-	const message = formatSIWEMessage(
-		{
-			domain: payload.domain,
-			uri: payload.uri,
-			statement: payload.statement,
-			version: payload.version,
-			chainId: payload.chainId,
-			type: payload.type,
-			nonce: payload.nonce,
-			issuedAt: payload.issuedAt,
-			expirationTime: payload.expirationTime,
-			notBefore: payload.notBefore,
-			requestId: payload.requestId,
-			resources: payload.resources,
-		},
-		payload.address
-	)
-
-	try {
-		const rpcUrl = resolveAgentkitSignatureRpcUrl(payload.chainId, options)
-		const valid = await verifyEVMSignature(message, payload.address, payload.signature, payload.chainId, rpcUrl)
-
-		if (!valid) {
-			return {
-				valid: false,
-				error: `Signature verification failed. The signature does not match the reconstructed SIWE message. Ensure your agent signs exactly this message using EIP-191 (EOA) or ERC-1271 (smart wallet):\n\n${message}`,
-			}
-		}
-
-		return { valid: true, address: payload.address }
-	} catch (error) {
-		const reason = error instanceof Error ? error.message : 'Unknown error'
-		return {
-			valid: false,
-			error: `Signature verification error: ${reason}. The SIWE message the server reconstructed from your payload:\n\n${message}`,
-		}
-	}
-}
-
-function verifySolanaPayload(payload: AgentkitPayload): AgentkitVerifyResult {
-	const message = formatSIWSMessage(
-		{
-			domain: payload.domain,
-			uri: payload.uri,
-			statement: payload.statement,
-			version: payload.version,
-			chainId: payload.chainId,
-			type: payload.type,
-			nonce: payload.nonce,
-			issuedAt: payload.issuedAt,
-			expirationTime: payload.expirationTime,
-			notBefore: payload.notBefore,
-			requestId: payload.requestId,
-			resources: payload.resources,
-		},
-		payload.address
-	)
-
-	let signature: Uint8Array
-	let publicKey: Uint8Array
-
-	try {
-		signature = decodeBase58(payload.signature)
-		publicKey = decodeBase58(payload.address)
-	} catch (error) {
-		return {
-			valid: false,
-			error: `Invalid Base58 encoding: ${error instanceof Error ? error.message : 'decode failed'}`,
-		}
-	}
-
-	if (signature.length !== 64) {
-		return { valid: false, error: `Invalid signature length: expected 64 bytes, got ${signature.length}` }
-	}
-
-	if (publicKey.length !== 32) {
-		return { valid: false, error: `Invalid public key length: expected 32 bytes, got ${publicKey.length}` }
-	}
-
-	const valid = verifySolanaSignature(message, signature, publicKey)
-
-	if (!valid) {
-		return { valid: false, error: 'Solana signature verification failed' }
-	}
-
-	return { valid: true, address: payload.address }
+export function verificationError(message: string, code: string, address?: string): Error {
+	return Object.assign(new Error(message), { code, ...(address ? { address } : {}) })
 }

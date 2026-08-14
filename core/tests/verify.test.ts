@@ -1,34 +1,85 @@
 import { describe, expect, it } from 'bun:test'
-import { resolveAgentkitSignatureRpcUrl } from '../src/verify'
+import { isAddressEqual } from 'viem'
+import { generatePrivateKey, privateKeyToAccount } from 'viem/accounts'
+import { verifyRequest } from '../src/verify'
 
-describe('resolveAgentkitSignatureRpcUrl', () => {
-	it('keeps the legacy single rpcUrl form as a fallback', () => {
-		expect(resolveAgentkitSignatureRpcUrl('eip155:8453', 'https://fallback.example')).toBe('https://fallback.example')
-		expect(resolveAgentkitSignatureRpcUrl('eip155:8453', { rpcUrl: 'https://fallback.example' })).toBe(
-			'https://fallback.example'
+const encoder = new TextEncoder()
+
+async function signedRequest(body: string) {
+	const account = privateKeyToAccount(generatePrivateKey())
+	const signature = await account.signMessage({ message: { raw: encoder.encode(body) } })
+	const request = new Request('https://api.example.com/data', {
+		method: 'POST',
+		headers: { 'X-AgentKit': signature },
+		body,
+	})
+	return { account, request, signature }
+}
+
+describe('verify', () => {
+	it('recovers the signer from the exact request body and returns its nullifier hash', async () => {
+		const body = JSON.stringify({ hello: 'world' })
+		const { account, request } = await signedRequest(body)
+		const addresses: string[] = []
+
+		const nullifierHash = await verifyRequest(request, {
+			async lookupNullifierHash(address) {
+				addresses.push(address)
+				return isAddressEqual(address as `0x${string}`, account.address) ? '0x1234' : null
+			},
+		})
+
+		expect(nullifierHash).toBe('0x1234')
+		expect(addresses).toHaveLength(1)
+		expect(isAddressEqual(addresses[0] as `0x${string}`, account.address)).toBe(true)
+		expect(await request.text()).toBe(body)
+	})
+
+	it('throws when the X-AgentKit header is missing', async () => {
+		const request = new Request('https://api.example.com/data', { method: 'POST', body: 'hello' })
+		await expect(verifyRequest(request)).rejects.toThrow('Missing X-AgentKit header')
+	})
+
+	it('throws when the header is not a valid signature', async () => {
+		const request = new Request('https://api.example.com/data', {
+			method: 'POST',
+			headers: { 'X-AgentKit': 'not-a-signature' },
+			body: 'hello',
+		})
+		await expect(verifyRequest(request)).rejects.toThrow('Invalid X-AgentKit signature')
+	})
+
+	it('rejects a signature copied onto a different body', async () => {
+		const { account, signature } = await signedRequest('original')
+		const request = new Request('https://api.example.com/data', {
+			method: 'POST',
+			headers: { 'X-AgentKit': signature },
+			body: 'tampered',
+		})
+
+		await expect(
+			verifyRequest(request, {
+				lookupNullifierHash: async address =>
+					isAddressEqual(address as `0x${string}`, account.address) ? '0x1234' : null,
+			})
+		).rejects.toThrow('Agent is not registered in AgentBook')
+	})
+
+	it('throws when the recovered signer is not registered', async () => {
+		const { request } = await signedRequest('hello')
+		await expect(verifyRequest(request, { lookupNullifierHash: async () => null })).rejects.toThrow(
+			'Agent is not registered in AgentBook'
 		)
 	})
 
-	it('selects the custom RPC URL from the signed payload chain ID', () => {
-		expect(
-			resolveAgentkitSignatureRpcUrl('eip155:8453', {
-				rpcUrl: 'https://world-chain.example',
-				rpcUrls: {
-					'eip155:480': 'https://world-chain.example',
-					'eip155:8453': 'https://base.example',
+	it('propagates AgentBook RPC failures', async () => {
+		const { request } = await signedRequest('hello')
+		await expect(
+			verifyRequest(request, {
+				lookupNullifierHash: async () => {
+					throw new Error('World Chain unavailable')
 				},
 			})
-		).toBe('https://base.example')
-	})
-
-	it('falls back when no per-chain RPC URL is configured for the signed chain', () => {
-		expect(
-			resolveAgentkitSignatureRpcUrl('eip155:10', {
-				rpcUrl: 'https://fallback.example',
-				rpcUrls: {
-					'eip155:480': 'https://world-chain.example',
-				},
-			})
-		).toBe('https://fallback.example')
+		).rejects.toThrow('World Chain unavailable')
 	})
 })

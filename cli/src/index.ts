@@ -1,20 +1,15 @@
 #!/usr/bin/env node
 import './polyfill.js'
 import { Cli, z } from 'incur'
-import { createPublicClient, http, decodeAbiParameters } from 'viem'
 import type { Hex } from 'viem'
-import { worldchain } from 'viem/chains'
-import { createWorldBridgeStore } from '@worldcoin/idkit-core'
-import type { ISuccessResult } from '@worldcoin/idkit-core'
-import { solidityEncode } from '@worldcoin/idkit-core/hashing'
 import qrcode from 'qrcode-terminal'
+import { worldchain } from 'viem/chains'
+import type { ISuccessResult } from '@worldcoin/idkit-core'
+import { createWorldBridgeStore } from '@worldcoin/idkit-core'
+import { solidityEncode } from '@worldcoin/idkit-core/hashing'
+import { createPublicClient, http, decodeAbiParameters } from 'viem'
+import { requestBodyInputSchema, signRequestBody } from './prove.js'
 import { loadAgentSigner, loadOrCreateAgentIdentity } from './key.js'
-import {
-	AgentkitPayloadError,
-	agentkitExtensionInputSchema,
-	createAgentkitProof,
-	parseAgentkitExtension,
-} from './prove.js'
 
 // ─── Config ──────────────────────────────────────────────────────────────────
 
@@ -52,7 +47,10 @@ const cli = Cli.create('agentkit', {
 cli.command('status', {
 	description: 'Check whether an agent wallet is registered in AgentBook.',
 	args: z.object({
-		address: z.string().regex(/^0x[a-fA-F0-9]{40}$/, 'Invalid Ethereum address').describe('Agent wallet address'),
+		address: z
+			.string()
+			.regex(/^0x[a-fA-F0-9]{40}$/, 'Invalid Ethereum address')
+			.describe('Agent wallet address'),
 	}),
 	outputPolicy: 'agent-only',
 	output: z.object({
@@ -255,24 +253,14 @@ cli.command('register', {
 })
 
 cli.command('prove', {
-	description: 'Sign an x402 AgentKit challenge with this registered agent.',
+	description: 'Sign a request body with this registered agent.',
 	args: z.object({
-		payload: agentkitExtensionInputSchema,
+		body: requestBodyInputSchema,
 	}),
 	output: z.object({
-		signature: z.string().describe('Base64-encoded AgentKit authorization value'),
+		signature: z.string().describe('Hexadecimal X-AgentKit signature'),
 	}),
 	async run(c) {
-		let extension
-		try {
-			extension = parseAgentkitExtension(c.args.payload)
-		} catch (err) {
-			return c.error({
-				code: 'INVALID_AGENTKIT_PAYLOAD',
-				message: err instanceof Error ? err.message : 'Invalid AgentKit extension payload',
-			})
-		}
-
 		let signer
 		try {
 			signer = await loadAgentSigner()
@@ -313,12 +301,11 @@ cli.command('prove', {
 		}
 
 		try {
-			const proof = await createAgentkitProof(extension, signer)
-			return { signature: proof.encoded }
+			return { signature: await signRequestBody(c.args.body, signer) }
 		} catch (err) {
 			return c.error({
-				code: err instanceof AgentkitPayloadError ? 'INVALID_AGENTKIT_PAYLOAD' : 'SIGNING_FAILED',
-				message: err instanceof Error ? err.message : 'Unable to sign the AgentKit challenge',
+				code: 'SIGNING_FAILED',
+				message: err instanceof Error ? err.message : 'Unable to sign the request body',
 			})
 		}
 	},
