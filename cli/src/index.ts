@@ -8,7 +8,7 @@ import type { ISuccessResult } from '@worldcoin/idkit-core'
 import { createWorldBridgeStore } from '@worldcoin/idkit-core'
 import { solidityEncode } from '@worldcoin/idkit-core/hashing'
 import { createPublicClient, http, decodeAbiParameters } from 'viem'
-import { requestBodyInputSchema, signRequestBody } from './prove.js'
+import { bodyInputSchema, createProofHeaders, methodInputSchema, urlInputSchema } from './prove.js'
 import { loadAgentSigner, loadOrCreateAgentIdentity } from './key.js'
 
 // ─── Config ──────────────────────────────────────────────────────────────────
@@ -253,12 +253,20 @@ cli.command('register', {
 })
 
 cli.command('prove', {
-	description: 'Sign a request body with this registered agent.',
+	description: 'Sign a request with this registered agent using RFC 9421 HTTP message signatures.',
 	args: z.object({
-		body: requestBodyInputSchema,
+		method: methodInputSchema,
+		url: urlInputSchema,
+		body: bodyInputSchema,
 	}),
 	output: z.object({
-		signature: z.string().describe('Hexadecimal X-AgentKit signature'),
+		headers: z
+			.object({
+				'Content-Digest': z.string().describe('Digest of the request body'),
+				'Signature-Input': z.string().describe('RFC 9421 signature parameters'),
+				Signature: z.string().describe('RFC 9421 signature'),
+			})
+			.describe('Copy these headers onto the request unmodified'),
 	}),
 	async run(c) {
 		let signer
@@ -301,11 +309,18 @@ cli.command('prove', {
 		}
 
 		try {
-			return { signature: await signRequestBody(c.args.body, signer) }
+			return {
+				headers: await createProofHeaders({
+					method: c.args.method,
+					url: c.args.url,
+					body: c.args.body,
+					signer,
+				}),
+			}
 		} catch (err) {
 			return c.error({
 				code: 'SIGNING_FAILED',
-				message: err instanceof Error ? err.message : 'Unable to sign the request body',
+				message: err instanceof Error ? err.message : 'Unable to sign the request',
 			})
 		}
 	},

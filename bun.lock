@@ -19,6 +19,7 @@
         "agentkit": "dist/index.js",
       },
       "dependencies": {
+        "@worldcoin/agentkit-core": "^0.2.1",
         "@worldcoin/idkit-core": "2.1.0",
         "incur": "^0.2.2",
         "qrcode-terminal": "^0.12.0",
