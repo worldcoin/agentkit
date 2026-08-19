@@ -1,81 +1,200 @@
 import { describe, expect, it } from 'bun:test'
-import { isAddressEqual } from 'viem'
 import { generatePrivateKey, privateKeyToAccount } from 'viem/accounts'
+import { createSignatureHeaders } from '../src/signature'
 import { verifyRequest } from '../src/verify'
 
-const encoder = new TextEncoder()
+const NOW = 1755600000
 
-async function signedRequest(body: string) {
-	const account = privateKeyToAccount(generatePrivateKey())
-	const signature = await account.signMessage({ message: { raw: encoder.encode(body) } })
-	const request = new Request('https://api.example.com/data', {
-		method: 'POST',
-		headers: { 'X-AgentKit': signature },
-		body,
-	})
-	return { account, request, signature }
+type SignedRequestOptions = {
+	method?: string
+	url?: string
+	body?: string
+	requestUrl?: string
+	requestMethod?: string
+	requestBody?: string
+	now?: number
+	expiresInSeconds?: number
+	keyid?: string
 }
 
-describe('verify', () => {
-	it('recovers the signer from the exact request body and returns its nullifier hash', async () => {
-		const body = JSON.stringify({ hello: 'world' })
-		const { account, request } = await signedRequest(body)
-		const addresses: string[] = []
+async function signedRequest(options: SignedRequestOptions = {}) {
+	const account = privateKeyToAccount(generatePrivateKey())
+	const method = options.method ?? 'POST'
+	const url = options.url ?? 'https://api.example.com/data?x=1'
+	const body = options.body ?? '{"a":1}'
 
-		const nullifierHash = await verifyRequest(request, {
-			async lookupNullifierHash(address) {
-				addresses.push(address)
-				return isAddressEqual(address as `0x${string}`, account.address) ? '0x1234' : null
+	const headers = await createSignatureHeaders({
+		method,
+		url,
+		body,
+		address: options.keyid ?? account.address,
+		signMessage: message => account.signMessage({ message }),
+		now: options.now ?? NOW,
+		expiresInSeconds: options.expiresInSeconds,
+	})
+
+	const requestMethod = options.requestMethod ?? method
+	const requestBody = options.requestBody ?? body
+	const request = new Request(options.requestUrl ?? url, {
+		method: requestMethod,
+		headers,
+		...(requestMethod === 'GET' || requestMethod === 'HEAD' ? {} : { body: requestBody }),
+	})
+
+	return { account, request, headers }
+}
+
+function registered(account: { address: string }) {
+	return {
+		now: () => NOW + 1,
+		lookupNullifierHash: async (address: string) =>
+			address === account.address.toLowerCase() ? '0x1234' : null,
+	}
+}
+
+describe('verifyRequest', () => {
+	it('verifies a signed POST and returns the nullifier hash, address, and params', async () => {
+		const { account, request } = await signedRequest()
+		const lookups: string[] = []
+
+		const result = await verifyRequest(request, {
+			now: () => NOW + 1,
+			lookupNullifierHash: async address => {
+				lookups.push(address)
+				return address === account.address.toLowerCase() ? '0x1234' : null
 			},
 		})
 
-		expect(nullifierHash).toBe('0x1234')
-		expect(addresses).toHaveLength(1)
-		expect(isAddressEqual(addresses[0] as `0x${string}`, account.address)).toBe(true)
-		expect(await request.text()).toBe(body)
+		expect(result.nullifierHash).toBe('0x1234')
+		expect(result.address).toBe(account.address.toLowerCase())
+		expect(result.created).toBe(NOW)
+		expect(result.expires).toBe(NOW + 300)
+		expect(result.nonce.length).toBeGreaterThanOrEqual(16)
+		expect(lookups).toEqual([account.address.toLowerCase()])
+		expect(await request.text()).toBe('{"a":1}')
 	})
 
-	it('throws when the X-AgentKit header is missing', async () => {
-		const request = new Request('https://api.example.com/data', { method: 'POST', body: 'hello' })
-		await expect(verifyRequest(request)).rejects.toThrow('Missing X-AgentKit header')
+	it('verifies a bodyless GET request', async () => {
+		const { account, request } = await signedRequest({ method: 'GET', url: 'https://api.example.com/data', body: '' })
+		const result = await verifyRequest(request, registered(account))
+		expect(result.nullifierHash).toBe('0x1234')
 	})
 
-	it('throws when the header is not a valid signature', async () => {
-		const request = new Request('https://api.example.com/data', {
-			method: 'POST',
-			headers: { 'X-AgentKit': 'not-a-signature' },
-			body: 'hello',
-		})
-		await expect(verifyRequest(request)).rejects.toThrow('Invalid X-AgentKit signature')
+	it('rejects a request missing any signature header', async () => {
+		for (const missing of ['Signature-Input', 'Signature', 'Content-Digest']) {
+			const { request } = await signedRequest()
+			const headers = new Headers(request.headers)
+			headers.delete(missing)
+			const stripped = new Request(request.url, { method: 'POST', headers, body: '{"a":1}' })
+			await expect(verifyRequest(stripped, { now: () => NOW + 1 })).rejects.toThrow(`Missing ${missing} header`)
+		}
 	})
 
-	it('rejects a signature copied onto a different body', async () => {
-		const { account, signature } = await signedRequest('original')
-		const request = new Request('https://api.example.com/data', {
-			method: 'POST',
-			headers: { 'X-AgentKit': signature },
-			body: 'tampered',
-		})
-
-		await expect(
-			verifyRequest(request, {
-				lookupNullifierHash: async address =>
-					isAddressEqual(address as `0x${string}`, account.address) ? '0x1234' : null,
-			})
-		).rejects.toThrow('Agent is not registered in AgentBook')
-	})
-
-	it('throws when the recovered signer is not registered', async () => {
-		const { request } = await signedRequest('hello')
-		await expect(verifyRequest(request, { lookupNullifierHash: async () => null })).rejects.toThrow(
-			'Agent is not registered in AgentBook'
+	it('rejects a tampered body', async () => {
+		const { account, request } = await signedRequest({ requestBody: '{"a":2}' })
+		await expect(verifyRequest(request, registered(account))).rejects.toThrow(
+			'Content-Digest does not match the request body'
 		)
 	})
 
-	it('propagates AgentBook RPC failures', async () => {
-		const { request } = await signedRequest('hello')
+	it('rejects a forged digest that matches a tampered body', async () => {
+		const { account, headers } = await signedRequest()
+		const forged = await createSignatureHeaders({
+			method: 'POST',
+			url: 'https://api.example.com/data?x=1',
+			body: '{"a":2}',
+			address: account.address,
+			signMessage: async () => `0x${'12'.repeat(65)}`,
+			now: NOW,
+		})
+		const request = new Request('https://api.example.com/data?x=1', {
+			method: 'POST',
+			headers: { ...headers, 'Content-Digest': forged['Content-Digest'] },
+			body: '{"a":2}',
+		})
+
+		await expect(verifyRequest(request, registered(account))).rejects.toThrow(/signature|keyid/i)
+	})
+
+	it.each([
+		['method', { requestMethod: 'PUT' }],
+		['path', { requestUrl: 'https://api.example.com/other?x=1' }],
+		['query', { requestUrl: 'https://api.example.com/data?x=2' }],
+		['removed query', { requestUrl: 'https://api.example.com/data' }],
+		['authority', { requestUrl: 'https://evil.example.com/data?x=1' }],
+		['port', { requestUrl: 'https://api.example.com:8443/data?x=1' }],
+	])('rejects a signature replayed against a different %s', async (_name, overrides) => {
+		const { account, request } = await signedRequest(overrides)
+		await expect(verifyRequest(request, registered(account))).rejects.toThrow(
+			'Signature does not match the keyid address'
+		)
+	})
+
+	it('rejects an expired signature', async () => {
+		const { account, request } = await signedRequest({ expiresInSeconds: 10 })
+		await expect(verifyRequest(request, { ...registered(account), now: () => NOW + 11 })).rejects.toThrow(
+			'Signature has expired'
+		)
+	})
+
+	it('rejects a long client expiry beyond the server window', async () => {
+		const { account, request } = await signedRequest({ expiresInSeconds: 3600 })
+		await expect(verifyRequest(request, { ...registered(account), now: () => NOW + 400 })).rejects.toThrow(
+			'Signature has expired'
+		)
+	})
+
+	it('rejects a created timestamp too far in the future, but tolerates clock skew', async () => {
+		const early = await signedRequest({ now: NOW + 60 })
+		await expect(verifyRequest(early.request, { ...registered(early.account), now: () => NOW })).rejects.toThrow(
+			'Signature created timestamp is in the future'
+		)
+
+		const skewed = await signedRequest({ now: NOW + 3 })
+		const result = await verifyRequest(skewed.request, { ...registered(skewed.account), now: () => NOW })
+		expect(result.nullifierHash).toBe('0x1234')
+	})
+
+	it('rejects a valid signature whose keyid names a different address', async () => {
+		const other = privateKeyToAccount(generatePrivateKey())
+		const { account, request } = await signedRequest({ keyid: other.address })
+		await expect(verifyRequest(request, registered(account))).rejects.toThrow(
+			'Signature does not match the keyid address'
+		)
+	})
+
+	it('rejects a reused nonce via the checkNonce dependency', async () => {
+		const { account, request } = await signedRequest()
+		const seen: Array<{ nonce: string; address: string; created: number; expires: number }> = []
+
 		await expect(
 			verifyRequest(request, {
+				...registered(account),
+				checkNonce: async details => {
+					seen.push(details)
+					return false
+				},
+			})
+		).rejects.toThrow('Signature nonce has already been used')
+
+		expect(seen).toHaveLength(1)
+		expect(seen[0]!.address).toBe(account.address.toLowerCase())
+		expect(seen[0]!.created).toBe(NOW)
+		expect(seen[0]!.expires).toBe(NOW + 300)
+	})
+
+	it('throws when the recovered signer is not registered', async () => {
+		const { request } = await signedRequest()
+		await expect(
+			verifyRequest(request, { now: () => NOW + 1, lookupNullifierHash: async () => null })
+		).rejects.toThrow('Agent is not registered in AgentBook')
+	})
+
+	it('propagates AgentBook RPC failures', async () => {
+		const { request } = await signedRequest()
+		await expect(
+			verifyRequest(request, {
+				now: () => NOW + 1,
 				lookupNullifierHash: async () => {
 					throw new Error('World Chain unavailable')
 				},
