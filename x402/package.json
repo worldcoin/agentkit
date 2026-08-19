@@ -29,7 +29,8 @@
 		"access": "public"
 	},
 	"scripts": {
-		"build": "tsup"
+		"build": "tsup",
+		"test": "bun run --cwd ../core build && bun test"
 	},
 	"dependencies": {
 		"@worldcoin/agentkit-core": "^0.2.1",
