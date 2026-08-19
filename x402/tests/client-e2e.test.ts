@@ -1,9 +1,16 @@
 import { describe, expect, it } from 'bun:test'
+import { createSignatureHeaders } from '../../core/src/signature'
 import { verifyRequest } from '../../core/src/verify'
 import { createAgentkitHooksInternal } from '../src/hooks'
-import { AGENTKIT, AGENTKIT_HEADER } from '../src/protocol'
+import { InMemoryAgentKitStorage } from '../src/storage'
 import { createAgentkitClient, type AgentKitStorage } from '../src'
 import { generatePrivateKey, privateKeyToAccount } from 'viem/accounts'
+import {
+	AGENTKIT,
+	AGENTKIT_CONTENT_DIGEST_HEADER,
+	AGENTKIT_SIGNATURE_HEADER,
+	AGENTKIT_SIGNATURE_INPUT_HEADER,
+} from '../src/protocol'
 
 const CHAIN_ID = 'eip155:8453'
 const PROTECTED_URL = 'https://agentkit.example/protected'
@@ -37,6 +44,9 @@ function createAdapter(request: Request, body: unknown) {
 			if (name.toLowerCase() === 'content-type') return request.headers.get('content-type') ?? undefined
 			return request.headers.get(name) ?? undefined
 		},
+		getMethod() {
+			return request.method
+		},
 		getUrl() {
 			return request.url
 		},
@@ -47,7 +57,7 @@ function createAdapter(request: Request, body: unknown) {
 }
 
 describe('AgentKit client/server E2E', () => {
-	it('signs the request body and satisfies an AgentKit-enabled 402 before payment', async () => {
+	it('signs the request and satisfies an AgentKit-enabled 402 before payment', async () => {
 		const account = privateKeyToAccount(generatePrivateKey())
 		const clientEvents: Array<Record<string, unknown>> = []
 		const serverEvents: Array<Record<string, string>> = []
@@ -72,7 +82,7 @@ describe('AgentKit client/server E2E', () => {
 					verifyRequest(request, {
 						async lookupNullifierHash(address) {
 							lookups.push(address)
-							return address.toLowerCase() === account.address.toLowerCase() ? 'human-1' : null
+							return address === account.address.toLowerCase() ? 'human-1' : null
 						},
 					}),
 			}
@@ -91,7 +101,7 @@ describe('AgentKit client/server E2E', () => {
 		}
 
 		const agentkit = createAgentkitClient({
-			signer: { signMessage: message => account.signMessage({ message }) },
+			signer: { address: account.address, signMessage: message => account.signMessage({ message }) },
 			fetch,
 			onEvent: event => clientEvents.push(event),
 		})
@@ -106,7 +116,7 @@ describe('AgentKit client/server E2E', () => {
 		expect(response.status).toBe(200)
 		expect(body).toEqual({ ok: true })
 		expect(requestCount).toBe(2)
-		expect(lookups).toEqual([account.address])
+		expect(lookups).toEqual([account.address.toLowerCase()])
 		expect(usageCalls).toEqual([{ endpoint: '/protected', humanId: 'human-1', limit: 3 }])
 		expect(clientEvents.map(event => event.type)).toEqual([
 			'agentkit_detected',
@@ -117,14 +127,61 @@ describe('AgentKit client/server E2E', () => {
 			{
 				type: 'agent_verified',
 				resource: '/protected',
-				address: account.address,
+				address: account.address.toLowerCase(),
 				humanId: 'human-1',
 			},
 		])
 	})
 
-	it('does not treat the lowercase extension key as the request header name', () => {
+	it('rejects an identical replay and a tampered body under the same signature', async () => {
+		const account = privateKeyToAccount(generatePrivateKey())
+		const events: Array<Record<string, string>> = []
+		const hooks = createAgentkitHooksInternal(
+			{ storage: new InMemoryAgentKitStorage(), onEvent: event => events.push(event as Record<string, string>) },
+			{ verify: request => verifyRequest(request, { lookupNullifierHash: async () => 'human-1' }) }
+		)
+
+		const headers = await createSignatureHeaders({
+			method: 'POST',
+			url: PROTECTED_URL,
+			body: '{"hello":"world"}',
+			address: account.address,
+			signMessage: message => account.signMessage({ message }),
+		})
+
+		const adapter = (body: unknown) => ({
+			getHeader(name: string) {
+				const lower = name.toLowerCase()
+				if (lower === 'content-type') return 'application/json'
+				if (lower === 'signature-input') return headers['Signature-Input']
+				if (lower === 'signature') return headers.Signature
+				if (lower === 'content-digest') return headers['Content-Digest']
+				return undefined
+			},
+			getMethod: () => 'POST',
+			getUrl: () => PROTECTED_URL,
+			getBody: () => body,
+		})
+
+		await expect(hooks.requestHook({ adapter: adapter({ hello: 'world' }), path: '/protected' })).resolves.toEqual({
+			grantAccess: true,
+		})
+		await expect(
+			hooks.requestHook({ adapter: adapter({ hello: 'world' }), path: '/protected' })
+		).resolves.toBeUndefined()
+		await expect(
+			hooks.requestHook({ adapter: adapter({ hello: 'tampered' }), path: '/protected' })
+		).resolves.toBeUndefined()
+
+		expect(events.map(event => event.type)).toEqual(['agent_verified', 'validation_failed', 'validation_failed'])
+		expect(events[1]!.error).toBe('Signature nonce already used')
+		expect(events[2]!.error).toBe('Content-Digest does not match the request body')
+	})
+
+	it('uses standard signature header names distinct from the extension key', () => {
 		expect(AGENTKIT).toBe('agentkit')
-		expect(AGENTKIT_HEADER).toBe('X-AgentKit')
+		expect(AGENTKIT_SIGNATURE_INPUT_HEADER).toBe('Signature-Input')
+		expect(AGENTKIT_SIGNATURE_HEADER).toBe('Signature')
+		expect(AGENTKIT_CONTENT_DIGEST_HEADER).toBe('Content-Digest')
 	})
 })

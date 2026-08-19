@@ -1,8 +1,13 @@
 import type { AgentkitMode } from './types'
 import type { AgentKitStorage } from './storage'
-import { verify } from '@worldcoin/agentkit-core'
-import { recoverMessageAddress, type Hex } from 'viem'
-import { AGENTKIT_HEADER, normalizeAgentkitBody, normalizeAgentkitJsonBody } from './protocol'
+import { verifyRequest, type VerifiedAgentRequest } from '@worldcoin/agentkit-core'
+import {
+	AGENTKIT_CONTENT_DIGEST_HEADER,
+	AGENTKIT_SIGNATURE_HEADER,
+	AGENTKIT_SIGNATURE_INPUT_HEADER,
+	normalizeAgentkitBody,
+	normalizeAgentkitJsonBody,
+} from './protocol'
 
 export type AgentkitHookEvent =
 	| { type: 'agent_verified'; resource: string; address: string; humanId: string }
@@ -21,18 +26,14 @@ export function createAgentkitHooks(options: CreateAgentkitHooksOptions) {
 	return createAgentkitHooksInternal(options)
 }
 
-type VerifyFunction = (request: Request) => Promise<string>
-type RecoverAddressFunction = (body: Uint8Array, signature: Hex) => Promise<string>
+type VerifyFunction = (request: Request) => Promise<VerifiedAgentRequest>
 
 export function createAgentkitHooksInternal(
 	options: CreateAgentkitHooksOptions,
-	dependencies: { verify?: VerifyFunction; recoverAddress?: RecoverAddressFunction } = {}
+	dependencies: { verify?: VerifyFunction } = {}
 ) {
 	const { onEvent } = options
-	const verifyRequest = dependencies.verify ?? verify
-	const recoverAddress =
-		dependencies.recoverAddress ??
-		((body: Uint8Array, signature: Hex) => recoverMessageAddress({ message: { raw: body }, signature }))
+	const verify = dependencies.verify ?? verifyRequest
 	const mode: AgentkitMode = options.mode ?? { type: 'free' }
 	const storage = options.storage
 
@@ -58,11 +59,16 @@ export function createAgentkitHooksInternal(
 	const pendingDiscounts = new Map<string, { humanId: string; address: string; createdAt: number }>()
 
 	const requestHook = async (context: {
-		adapter: { getHeader(name: string): string | undefined; getUrl(): string; getBody?(): unknown }
+		adapter: {
+			getHeader(name: string): string | undefined
+			getMethod(): string
+			getUrl(): string
+			getBody?(): unknown
+		}
 		path: string
 	}): Promise<void | { grantAccess: true }> => {
-		const header = context.adapter.getHeader(AGENTKIT_HEADER)
-		if (!header) return
+		const signatureInput = context.adapter.getHeader(AGENTKIT_SIGNATURE_INPUT_HEADER)
+		if (!signatureInput) return
 
 		try {
 			const parsedBody = await context.adapter.getBody?.()
@@ -71,14 +77,31 @@ export function createAgentkitHooksInternal(
 				contentType === 'application/json' || contentType?.endsWith('+json')
 					? normalizeAgentkitJsonBody(parsedBody)
 					: normalizeAgentkitBody(parsedBody)
-			const bodyBytes = new TextEncoder().encode(body)
+
+			// Rebuild the request core verifies against from what actually arrived: the real
+			// method and URL, the signature headers, and the re-normalized body bytes.
+			const method = context.adapter.getMethod().toUpperCase()
+			const headers = new Headers({ [AGENTKIT_SIGNATURE_INPUT_HEADER]: signatureInput })
+			const signatureHeader = context.adapter.getHeader(AGENTKIT_SIGNATURE_HEADER)
+			if (signatureHeader) headers.set(AGENTKIT_SIGNATURE_HEADER, signatureHeader)
+			const contentDigest = context.adapter.getHeader(AGENTKIT_CONTENT_DIGEST_HEADER)
+			if (contentDigest) headers.set(AGENTKIT_CONTENT_DIGEST_HEADER, contentDigest)
+
 			const verificationRequest = new Request(context.adapter.getUrl(), {
-				method: 'POST',
-				headers: { [AGENTKIT_HEADER]: header },
-				body,
+				method,
+				headers,
+				// GET/HEAD requests cannot carry a body; core digests the empty byte string.
+				...(method === 'GET' || method === 'HEAD' ? {} : { body }),
 			})
-			const humanId = await verifyRequest(verificationRequest)
-			const address = await recoverAddress(bodyBytes, header as Hex)
+			const { nullifierHash: humanId, address, nonce } = await verify(verificationRequest)
+
+			if (storage?.hasUsedNonce && storage?.recordNonce) {
+				if (await storage.hasUsedNonce(nonce)) {
+					onEvent?.({ type: 'validation_failed', resource: context.path, error: 'Signature nonce already used' })
+					return
+				}
+				await storage.recordNonce(nonce)
+			}
 
 			if (mode.type === 'free') {
 				onEvent?.({ type: 'agent_verified', resource: context.path, address, humanId })
