@@ -2,7 +2,6 @@ import { describe, expect, it } from 'bun:test'
 import { createSignatureHeaders } from '../../core/src/signature'
 import { verifyRequest } from '../../core/src/verify'
 import { createAgentkitHooksInternal } from '../src/hooks'
-import { InMemoryAgentKitStorage } from '../src/storage'
 import { createAgentkitClient, type AgentKitStorage } from '../src'
 import { generatePrivateKey, privateKeyToAccount } from 'viem/accounts'
 import {
@@ -133,11 +132,11 @@ describe('AgentKit client/server E2E', () => {
 		])
 	})
 
-	it('rejects an identical replay and a tampered body under the same signature', async () => {
+	it('rejects a tampered body under the same signature', async () => {
 		const account = privateKeyToAccount(generatePrivateKey())
 		const events: Array<Record<string, string>> = []
 		const hooks = createAgentkitHooksInternal(
-			{ storage: new InMemoryAgentKitStorage(), onEvent: event => events.push(event as Record<string, string>) },
+			{ onEvent: event => events.push(event as Record<string, string>) },
 			{ verify: request => verifyRequest(request, { lookupNullifierHash: async () => 'human-1' }) }
 		)
 
@@ -166,15 +165,16 @@ describe('AgentKit client/server E2E', () => {
 		await expect(hooks.requestHook({ adapter: adapter({ hello: 'world' }), path: '/protected' })).resolves.toEqual({
 			grantAccess: true,
 		})
-		await expect(
-			hooks.requestHook({ adapter: adapter({ hello: 'world' }), path: '/protected' })
-		).resolves.toBeUndefined()
+		// Until nonce-based single-use lands, a byte-identical replay inside the
+		// five-minute window verifies again by design.
+		await expect(hooks.requestHook({ adapter: adapter({ hello: 'world' }), path: '/protected' })).resolves.toEqual({
+			grantAccess: true,
+		})
 		await expect(
 			hooks.requestHook({ adapter: adapter({ hello: 'tampered' }), path: '/protected' })
 		).resolves.toBeUndefined()
 
-		expect(events.map(event => event.type)).toEqual(['agent_verified', 'validation_failed', 'validation_failed'])
-		expect(events[1]!.error).toBe('Signature nonce already used')
+		expect(events.map(event => event.type)).toEqual(['agent_verified', 'agent_verified', 'validation_failed'])
 		expect(events[2]!.error).toBe('Content-Digest does not match the request body')
 	})
 

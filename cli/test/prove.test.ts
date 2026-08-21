@@ -33,7 +33,6 @@ describe('createProofHeaders', () => {
 
 		expect(result.nullifierHash).toBe('0x1234')
 		expect(result.address).toBe(signer.address.toLowerCase())
-		expect(result.nonce.length).toBeGreaterThanOrEqual(16)
 	})
 
 	it('signs bodyless GET requests with an empty-body digest', async () => {

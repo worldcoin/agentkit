@@ -16,7 +16,6 @@ import {
 export type VerifiedAgentRequest = {
 	nullifierHash: string
 	address: string
-	nonce: string
 	created: number
 	expires: number
 }
@@ -24,8 +23,6 @@ export type VerifiedAgentRequest = {
 type VerifyRequestDependencies = {
 	recoverAddress?: (signatureBase: string, signature: Hex) => Promise<string>
 	lookupNullifierHash?: (address: string) => Promise<string | null>
-	/** Return false when the nonce was already seen; used to enforce single-use signatures. */
-	checkNonce?: (details: { nonce: string; address: string; created: number; expires: number }) => Promise<boolean>
 	/** Unix seconds; injectable for tests. */
 	now?: () => number
 }
@@ -90,16 +87,6 @@ export async function verifyRequest(
 		throw verificationError('Signature does not match the keyid address', 'KEYID_MISMATCH')
 	}
 
-	if (dependencies.checkNonce) {
-		const fresh = await dependencies.checkNonce({
-			nonce: params.nonce,
-			address: params.keyid,
-			created: params.created,
-			expires: params.expires,
-		})
-		if (!fresh) throw verificationError('Signature nonce has already been used', 'NONCE_REUSED', params.keyid)
-	}
-
 	const lookup = dependencies.lookupNullifierHash ?? (signer => lookupNullifierHash(signer))
 	const nullifierHash = await lookup(params.keyid)
 	if (!nullifierHash) {
@@ -109,7 +96,6 @@ export async function verifyRequest(
 	return {
 		nullifierHash,
 		address: params.keyid,
-		nonce: params.nonce,
 		created: params.created,
 		expires: params.expires,
 	}

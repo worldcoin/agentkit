@@ -1,19 +1,18 @@
 import { describe, expect, it } from 'bun:test'
 import type { VerifiedAgentRequest } from '@worldcoin/agentkit-core'
-import { AgentKitStorage, InMemoryAgentKitStorage } from '../src/storage'
+import { AgentKitStorage } from '../src/storage'
 import { createAgentkitHooksInternal } from '../src/hooks'
 
 const ADDRESS = '0x1234567890abcdef1234567890abcdef12345678'
 const URL_ = 'https://agentkit.example/protected'
 const SIGNATURE_INPUT =
-	'agentkit=("@method" "@authority" "@path" "@query" "content-digest");created=1755600000;expires=1755600300;nonce="mAyU1DSTCXHDXqzm5g1D3A==";keyid="0x1234567890abcdef1234567890abcdef12345678";tag="agentkit"'
+	'agentkit=("@method" "@authority" "@path" "@query" "content-digest");created=1755600000;expires=1755600300;keyid="0x1234567890abcdef1234567890abcdef12345678";tag="agentkit"'
 const SIGNATURE = `agentkit=:${'A'.repeat(87)}=:`
 const CONTENT_DIGEST = 'sha-256=:47DEQpj8HBSa+/TImW+5JCeuQeRkm5NMpJWZG3hSuFU=:'
 
 const VERIFIED: VerifiedAgentRequest = {
 	nullifierHash: 'human-1',
 	address: ADDRESS,
-	nonce: 'mAyU1DSTCXHDXqzm5g1D3A==',
 	created: 1755600000,
 	expires: 1755600300,
 }
@@ -134,48 +133,6 @@ describe('createAgentkitHooks', () => {
 				humanId: 'human-1',
 			},
 		])
-	})
-
-	it('rejects a replayed nonce when storage tracks nonces', async () => {
-		const events: Array<Record<string, string>> = []
-		const hooks = createAgentkitHooksInternal(
-			{ storage: new InMemoryAgentKitStorage(), onEvent: event => events.push(event as Record<string, string>) },
-			dependencies
-		)
-
-		await expect(hooks.requestHook({ adapter: createAdapter(), path: '/protected' })).resolves.toEqual({
-			grantAccess: true,
-		})
-		await expect(hooks.requestHook({ adapter: createAdapter(), path: '/protected' })).resolves.toBeUndefined()
-
-		expect(events.filter(event => event.type === 'validation_failed')).toEqual([
-			{ type: 'validation_failed', resource: '/protected', error: 'Signature nonce already used' },
-		])
-	})
-
-	it('records the verified nonce exactly once on success', async () => {
-		const recorded: string[] = []
-		const storage: AgentKitStorage = {
-			tryIncrementUsage: async () => true,
-			hasUsedNonce: async () => false,
-			recordNonce: async nonce => {
-				recorded.push(nonce)
-			},
-		}
-		const hooks = createAgentkitHooksInternal({ storage }, dependencies)
-
-		await hooks.requestHook({ adapter: createAdapter(), path: '/protected' })
-
-		expect(recorded).toEqual([VERIFIED.nonce])
-	})
-
-	it('still grants access when storage does not implement nonce tracking', async () => {
-		const storage: AgentKitStorage = { tryIncrementUsage: async () => true }
-		const hooks = createAgentkitHooksInternal({ mode: { type: 'free-trial', uses: 3 }, storage }, dependencies)
-
-		await expect(hooks.requestHook({ adapter: createAdapter(), path: '/protected' })).resolves.toEqual({
-			grantAccess: true,
-		})
 	})
 
 	it('uses the nullifier hash to recover discounted underpayments', async () => {

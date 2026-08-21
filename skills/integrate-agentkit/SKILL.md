@@ -78,7 +78,7 @@ Behind a proxy, the URL that `verify` sees must reflect the public host the clie
 
 Do not use a parsed JSON object as a replacement for the original body bytes.
 
-For endpoints where a five-minute replay window is unacceptable, use `verifyRequest(request, { checkNonce })` instead of `verify` and back `checkNonce` with a store that records each nonce once (TTL of at least 300 seconds).
+A byte-identical request can be replayed until its signature expires (at most five minutes). Nonce-based single-use signatures are a planned follow-up. Until then, if duplicate execution would be harmful for the endpoint, keep it idempotent or deduplicate at the application level (e.g. on a request ID inside the signed body).
 
 ## Keep the change local
 

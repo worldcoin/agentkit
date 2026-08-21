@@ -17,12 +17,11 @@ const encoder = new TextEncoder()
 const EXAMPLE_PARAMS = {
 	created: 1755600000,
 	expires: 1755600300,
-	nonce: 'mAyU1DSTCXHDXqzm5g1D3A==',
 	keyid: '0x0123456789abcdef0123456789abcdef01234567',
 }
 
 const EXAMPLE_RAW_PARAMS =
-	'("@method" "@authority" "@path" "@query" "content-digest");created=1755600000;expires=1755600300;nonce="mAyU1DSTCXHDXqzm5g1D3A==";keyid="0x0123456789abcdef0123456789abcdef01234567";tag="agentkit"'
+	'("@method" "@authority" "@path" "@query" "content-digest");created=1755600000;expires=1755600300;keyid="0x0123456789abcdef0123456789abcdef01234567";tag="agentkit"'
 
 describe('deriveComponents', () => {
 	it('normalizes method, authority, path, and query identically on both sides', () => {
@@ -86,9 +85,6 @@ describe('serializeSignatureParams', () => {
 	it('rejects invalid inputs before they can be signed', () => {
 		expect(() => serializeSignatureParams({ ...EXAMPLE_PARAMS, expires: EXAMPLE_PARAMS.created })).toThrow()
 		expect(() => serializeSignatureParams({ ...EXAMPLE_PARAMS, created: 1.5 })).toThrow()
-		expect(() => serializeSignatureParams({ ...EXAMPLE_PARAMS, nonce: 'short' })).toThrow()
-		expect(() => serializeSignatureParams({ ...EXAMPLE_PARAMS, nonce: 'contains"quote-0123456789' })).toThrow()
-		expect(() => serializeSignatureParams({ ...EXAMPLE_PARAMS, nonce: 'contains\\slash-0123456789' })).toThrow()
 		expect(() =>
 			serializeSignatureParams({ ...EXAMPLE_PARAMS, keyid: '0x0123456789ABCDEF0123456789abcdef01234567' })
 		).toThrow()
@@ -105,12 +101,11 @@ describe('createSignatureHeaders', () => {
 			address: account.address,
 			signMessage: message => account.signMessage({ message }),
 			now: EXAMPLE_PARAMS.created,
-			nonce: EXAMPLE_PARAMS.nonce,
 		})
 
 		expect(headers['Content-Digest']).toBe('sha-256=:AVq9f1zFei3ZS3WQ8ErYCEJzkF7jPsXOvq5iJ2qX+GI=:')
 		expect(headers['Signature-Input']).toBe(
-			`agentkit=("@method" "@authority" "@path" "@query" "content-digest");created=1755600000;expires=1755600300;nonce="mAyU1DSTCXHDXqzm5g1D3A==";keyid="${account.address.toLowerCase()}";tag="agentkit"`
+			`agentkit=("@method" "@authority" "@path" "@query" "content-digest");created=1755600000;expires=1755600300;keyid="${account.address.toLowerCase()}";tag="agentkit"`
 		)
 
 		const signature = parseSignatureHeader(headers.Signature)
@@ -125,7 +120,7 @@ describe('createSignatureHeaders', () => {
 		expect(await recoverMessageAddress({ message: base, signature })).toBe(account.address)
 	})
 
-	it('generates a fresh nonce and current window by default', async () => {
+	it('uses the current five-minute window by default', async () => {
 		const account = privateKeyToAccount(`0x${'02'.padStart(64, '0')}`)
 		const before = Math.floor(Date.now() / 1000)
 		const headers = await createSignatureHeaders({
@@ -138,7 +133,6 @@ describe('createSignatureHeaders', () => {
 		const parsed = parseSignatureInput(headers['Signature-Input'])
 		expect(parsed.created).toBeGreaterThanOrEqual(before)
 		expect(parsed.expires).toBe(parsed.created + 300)
-		expect(parsed.nonce.length).toBeGreaterThanOrEqual(16)
 	})
 })
 
@@ -151,10 +145,9 @@ describe('parseSignatureInput', () => {
 
 	it.each([
 		['wrong label', valid.replace('agentkit=', 'evil=')],
-		['duplicate members', `${valid}, evil=("@method");created=1;expires=2;nonce="0123456789abcdef";keyid="0x0123456789abcdef0123456789abcdef01234567";tag="agentkit"`],
+		['duplicate members', `${valid}, evil=("@method");created=1;expires=2;keyid="0x0123456789abcdef0123456789abcdef01234567";tag="agentkit"`],
 		['missing created', valid.replace(';created=1755600000', '')],
 		['missing expires', valid.replace(';expires=1755600300', '')],
-		['missing nonce', valid.replace(';nonce="mAyU1DSTCXHDXqzm5g1D3A=="', '')],
 		['missing keyid', valid.replace(';keyid="0x0123456789abcdef0123456789abcdef01234567"', '')],
 		['missing tag', valid.replace(';tag="agentkit"', '')],
 		['extra alg param', valid.replace(';tag="agentkit"', ';tag="agentkit";alg="ed25519"')],
@@ -167,11 +160,9 @@ describe('parseSignatureInput', () => {
 		['oversized timestamp', valid.replace('created=1755600000', `created=${'9'.repeat(16)}`)],
 		['expires before created', valid.replace('expires=1755600300', 'expires=1755599999')],
 		['uppercase keyid', valid.replace('0x0123456789abcdef', '0x0123456789ABCDEF')],
-		['short nonce', valid.replace('mAyU1DSTCXHDXqzm5g1D3A==', 'short')],
-		['nonce with backslash', valid.replace('mAyU1DSTCXHDXqzm5g1D3A==', 'mAyU1DSTCXHDXqzm5g1D3\\=')],
 		['wrong tag', valid.replace('tag="agentkit"', 'tag="other"')],
 		['trailing garbage', `${valid};x=1`],
-		['oversized header', `agentkit=${EXAMPLE_RAW_PARAMS.replace('mAyU1DSTCXHDXqzm5g1D3A==', 'a'.repeat(5000))}`],
+		['oversized header', `agentkit=${'a'.repeat(5000)}`],
 	])('rejects %s', (_name, value) => {
 		expect(() => parseSignatureInput(value)).toThrow()
 	})

@@ -28,9 +28,9 @@ npx @worldcoin/agentkit-cli register
 
 1. The client calls the protected resource normally.
 2. The server returns `402 Payment Required` with `extensions.agentkit`.
-3. The client signs the request under the AgentKit RFC 9421 profile — binding the method, host, path, query string, a digest of the normalized body, a five-minute validity window, and a single-use nonce — then retries with the `Signature-Input`, `Signature`, and `Content-Digest` headers.
+3. The client signs the request under the AgentKit RFC 9421 profile — binding the method, host, path, query string, a digest of the normalized body, and a five-minute validity window — then retries with the `Signature-Input`, `Signature`, and `Content-Digest` headers.
 4. The server calls Core's `verify(request)`, which rebuilds the signature base from the request it actually received, recovers the signer, and resolves its human nullifier from AgentBook on World Chain.
-5. The hooks record the nonce, then grant access, consume a trial use, or prepare a discounted payment according to the configured mode.
+5. The hooks grant access, consume a trial use, or prepare a discounted payment according to the configured mode.
 
 The `agentkit` string is the lowercase x402 extension key. The request carries the standard RFC 9421 headers `Signature-Input` and `Signature` (labeled `agentkit`) plus `Content-Digest`.
 
@@ -77,7 +77,7 @@ const response = await fetch(url, {
 })
 ```
 
-When using `createHeaders` directly, the request must use the exact method and URL that were signed, and the sent body must match `normalizeAgentkitBody(body)` exactly. Signed headers expire after five minutes and are single-use — create fresh headers for every request.
+When using `createHeaders` directly, the request must use the exact method and URL that were signed, and the sent body must match `normalizeAgentkitBody(body)` exactly. Signed headers expire after five minutes — create fresh headers for every request.
 
 ## Server hooks
 
@@ -229,13 +229,10 @@ Returns `requestHook` and, only for discount mode, `verifyFailureHook`.
 ```typescript
 interface AgentKitStorage {
 	tryIncrementUsage(endpoint: string, humanId: string, limit: number): Promise<boolean>
-
-	hasUsedNonce?(nonce: string): Promise<boolean>
-	recordNonce?(nonce: string): Promise<void>
 }
 ```
 
-The check and increment must be atomic. When both nonce methods are implemented, the hooks reject any signature whose nonce was already recorded, making every signed request single-use. Production implementations should make the nonce check-and-record atomic (e.g. Redis `SET NX EX 300`) and expire entries with a TTL of at least the 300-second signature window. Without nonce storage, replays of a captured signature are only bounded by the five-minute validity window.
+The check and increment must be atomic.
 
 ### Body helpers
 
@@ -246,8 +243,8 @@ The check and increment must be atomic. When both nonce methods are implemented,
 
 ## Security considerations
 
-- The signature binds the method, host, path, query string, a digest of the normalized body, a five-minute validity window, and a nonce. The server rebuilds every covered component from the request it actually received, so a signature cannot be replayed against a different service, endpoint, or payload.
-- Provide storage with nonce methods to make signatures single-use. Without it, an identical request can be replayed for up to five minutes.
+- The signature binds the method, host, path, query string, a digest of the normalized body, and a five-minute validity window. The server rebuilds every covered component from the request it actually received, so a signature cannot be replayed against a different service, endpoint, or payload.
+- A byte-identical request can be replayed until its signature expires (at most five minutes). Nonce-based single-use signatures are a planned follow-up; until then, keep protected operations idempotent where duplicate execution would be harmful.
 - Core uses recoverable EIP-191 EOA signatures over the RFC 9421 signature base, and the recovered signer must match the `keyid` address. Smart-contract and counterfactual-wallet signatures are not yet supported.
 - The signature binds `@authority`, so the URL the server verifies against must reflect the public host. Behind a proxy, make sure the framework applies `X-Forwarded-Host` (or equivalent) before the hook reads the request URL.
 - AgentBook is queried on World Chain for every verification, so registration state is not selected by the x402 payment network.
@@ -259,7 +256,7 @@ The check and increment must be atomic. When both nonce methods are implemented,
 ### Signature verification fails
 
 - Confirm all three headers are present: `Signature-Input`, `Signature`, and `Content-Digest`.
-- Confirm the headers were copied unmodified and the signature has not expired (five-minute window) or been used before.
+- Confirm the headers were copied unmodified and the signature has not expired (five-minute window).
 - Confirm the retry uses the exact method and URL (including the query string) that were signed.
 - Confirm the retried body is the same normalized body that was signed.
 - Behind a proxy, confirm the server sees the public host the client signed, not an internal one.

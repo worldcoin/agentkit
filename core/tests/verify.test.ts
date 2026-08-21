@@ -69,7 +69,6 @@ describe('verifyRequest', () => {
 		expect(result.address).toBe(account.address.toLowerCase())
 		expect(result.created).toBe(NOW)
 		expect(result.expires).toBe(NOW + 300)
-		expect(result.nonce.length).toBeGreaterThanOrEqual(16)
 		expect(lookups).toEqual([account.address.toLowerCase()])
 		expect(await request.text()).toBe('{"a":1}')
 	})
@@ -161,26 +160,6 @@ describe('verifyRequest', () => {
 		await expect(verifyRequest(request, registered(account))).rejects.toThrow(
 			'Signature does not match the keyid address'
 		)
-	})
-
-	it('rejects a reused nonce via the checkNonce dependency', async () => {
-		const { account, request } = await signedRequest()
-		const seen: Array<{ nonce: string; address: string; created: number; expires: number }> = []
-
-		await expect(
-			verifyRequest(request, {
-				...registered(account),
-				checkNonce: async details => {
-					seen.push(details)
-					return false
-				},
-			})
-		).rejects.toThrow('Signature nonce has already been used')
-
-		expect(seen).toHaveLength(1)
-		expect(seen[0]!.address).toBe(account.address.toLowerCase())
-		expect(seen[0]!.created).toBe(NOW)
-		expect(seen[0]!.expires).toBe(NOW + 300)
 	})
 
 	it('throws when the recovered signer is not registered', async () => {
