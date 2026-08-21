@@ -1,4 +1,4 @@
-import { isAddressEqual, recoverMessageAddress, type Hex } from 'viem'
+import { getAddress, isAddressEqual, recoverMessageAddress, type Hex } from 'viem'
 import { lookupNullifierHash } from './agent-book'
 import {
 	CLOCK_SKEW_SECONDS,
@@ -87,15 +87,18 @@ export async function verifyRequest(
 		throw verificationError('Signature does not match the keyid address', 'KEYID_MISMATCH')
 	}
 
+	// The wire format carries a lowercase keyid; surface the EIP-55 checksummed form.
+	const address = getAddress(params.keyid)
+
 	const lookup = dependencies.lookupNullifierHash ?? (signer => lookupNullifierHash(signer))
-	const nullifierHash = await lookup(params.keyid)
+	const nullifierHash = await lookup(address)
 	if (!nullifierHash) {
-		throw verificationError('Agent is not registered in AgentBook', 'AGENT_NOT_REGISTERED', params.keyid)
+		throw verificationError('Agent is not registered in AgentBook', 'AGENT_NOT_REGISTERED', address)
 	}
 
 	return {
 		nullifierHash,
-		address: params.keyid,
+		address,
 		created: params.created,
 		expires: params.expires,
 	}

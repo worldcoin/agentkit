@@ -47,8 +47,7 @@ async function signedRequest(options: SignedRequestOptions = {}) {
 function registered(account: { address: string }) {
 	return {
 		now: () => NOW + 1,
-		lookupNullifierHash: async (address: string) =>
-			address === account.address.toLowerCase() ? '0x1234' : null,
+		lookupNullifierHash: async (address: string) => (address === account.address ? '0x1234' : null),
 	}
 }
 
@@ -61,15 +60,16 @@ describe('verifyRequest', () => {
 			now: () => NOW + 1,
 			lookupNullifierHash: async address => {
 				lookups.push(address)
-				return address === account.address.toLowerCase() ? '0x1234' : null
+				return address === account.address ? '0x1234' : null
 			},
 		})
 
 		expect(result.nullifierHash).toBe('0x1234')
-		expect(result.address).toBe(account.address.toLowerCase())
+		// viem accounts expose EIP-55 checksummed addresses; verifyRequest surfaces the same form.
+		expect(result.address).toBe(account.address)
 		expect(result.created).toBe(NOW)
 		expect(result.expires).toBe(NOW + 300)
-		expect(lookups).toEqual([account.address.toLowerCase()])
+		expect(lookups).toEqual([account.address])
 		expect(await request.text()).toBe('{"a":1}')
 	})
 

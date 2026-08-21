@@ -1,3 +1,4 @@
+import { getAddress } from 'viem'
 import { describe, expect, it } from 'bun:test'
 import type { VerifiedAgentRequest } from '@worldcoin/agentkit-core'
 import { AgentKitStorage } from '../src/storage'
@@ -177,6 +178,30 @@ describe('createAgentkitHooks', () => {
 				humanId: 'human-1',
 			},
 		])
+	})
+
+	it('matches pending discounts case-insensitively across address representations', async () => {
+		// Core surfaces EIP-55 checksummed addresses while payment payloads may carry any casing.
+		const checksummed = getAddress(ADDRESS)
+		const hooks = createAgentkitHooksInternal(
+			{
+				mode: { type: 'discount', percent: 50, uses: 2 },
+				storage: { tryIncrementUsage: async () => true },
+			},
+			{ verify: async () => ({ ...VERIFIED, address: checksummed }) }
+		)
+
+		await hooks.requestHook({ adapter: createAdapter(), path: '/protected' })
+		const verifyResult = await hooks.verifyFailureHook?.({
+			paymentPayload: {
+				resource: { url: URL_ },
+				payload: { authorization: { from: ADDRESS.toUpperCase().replace('0X', '0x'), value: '50' } },
+			},
+			requirements: { amount: '100' },
+			error: new Error('invalid_exact_evm_payload_authorization_value: discounted payment'),
+		})
+
+		expect(verifyResult).toEqual({ recovered: true, result: { isValid: true, payer: checksummed } })
 	})
 
 	it('reports an unregistered signer separately from a malformed signature', async () => {

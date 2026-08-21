@@ -121,7 +121,7 @@ export function createAgentkitHooksInternal(
 				for (const [key, entry] of pendingDiscounts) {
 					if (now - entry.createdAt > PENDING_TTL_MS) pendingDiscounts.delete(key)
 				}
-				pendingDiscounts.set(`${context.path}:${address}`, {
+				pendingDiscounts.set(`${context.path}:${address.toLowerCase()}`, {
 					humanId,
 					address,
 					createdAt: now,
@@ -152,7 +152,9 @@ export function createAgentkitHooksInternal(
 				}): Promise<void | { recovered: true; result: { isValid: boolean; payer?: string } }> => {
 					const resourcePath = new URL(context.paymentPayload.resource.url).pathname
 					const payer = extractPayer(context.paymentPayload.payload)
-					const discountKey = payer ? `${resourcePath}:${payer}` : null
+					// Addresses compare case-insensitively: the stored key uses the lowercase
+					// signer address, payment payloads usually carry EIP-55 checksummed ones.
+					const discountKey = payer ? `${resourcePath}:${payer.toLowerCase()}` : null
 					const pending = discountKey ? pendingDiscounts.get(discountKey) : undefined
 					if (discountKey) pendingDiscounts.delete(discountKey)
 

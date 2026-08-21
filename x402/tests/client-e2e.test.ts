@@ -81,7 +81,7 @@ describe('AgentKit client/server E2E', () => {
 					verifyRequest(request, {
 						async lookupNullifierHash(address) {
 							lookups.push(address)
-							return address === account.address.toLowerCase() ? 'human-1' : null
+							return address === account.address ? 'human-1' : null
 						},
 					}),
 			}
@@ -115,7 +115,7 @@ describe('AgentKit client/server E2E', () => {
 		expect(response.status).toBe(200)
 		expect(body).toEqual({ ok: true })
 		expect(requestCount).toBe(2)
-		expect(lookups).toEqual([account.address.toLowerCase()])
+		expect(lookups).toEqual([account.address])
 		expect(usageCalls).toEqual([{ endpoint: '/protected', humanId: 'human-1', limit: 3 }])
 		expect(clientEvents.map(event => event.type)).toEqual([
 			'agentkit_detected',
@@ -126,7 +126,7 @@ describe('AgentKit client/server E2E', () => {
 			{
 				type: 'agent_verified',
 				resource: '/protected',
-				address: account.address.toLowerCase(),
+				address: account.address,
 				humanId: 'human-1',
 			},
 		])

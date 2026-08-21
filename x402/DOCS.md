@@ -246,6 +246,7 @@ The check and increment must be atomic.
 - The signature binds the method, host, path, query string, a digest of the normalized body, and a five-minute validity window. The server rebuilds every covered component from the request it actually received, so a signature cannot be replayed against a different service, endpoint, or payload.
 - A byte-identical request can be replayed until its signature expires (at most five minutes). Nonce-based single-use signatures are a planned follow-up; until then, keep protected operations idempotent where duplicate execution would be harmful.
 - Core uses recoverable EIP-191 EOA signatures over the RFC 9421 signature base, and the recovered signer must match the `keyid` address. Smart-contract and counterfactual-wallet signatures are not yet supported.
+- Addresses surfaced by the SDK (`verifyRequest` results, hook events, the recovered discount payer) are EIP-55 checksummed; the wire-format `keyid` is lowercase. Always compare addresses case-insensitively.
 - The signature binds `@authority`, so the URL the server verifies against must reflect the public host. Behind a proxy, make sure the framework applies `X-Forwarded-Host` (or equivalent) before the hook reads the request URL.
 - AgentBook is queried on World Chain for every verification, so registration state is not selected by the x402 payment network.
 - JSON normalization is part of the x402 hooks contract. A custom client must sign and send the same normalized representation.

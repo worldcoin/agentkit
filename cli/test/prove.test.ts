@@ -14,7 +14,7 @@ function createSigner(privateKey: `0x${string}`): AgentSigner & { account: Retur
 }
 
 function registeredLookup(signer: { address: string }) {
-	return async (address: string) => (address === signer.address.toLowerCase() ? '0x1234' : null)
+	return async (address: string) => (address === signer.address ? '0x1234' : null)
 }
 
 describe('createProofHeaders', () => {
@@ -32,7 +32,7 @@ describe('createProofHeaders', () => {
 		const result = await verifyRequest(request, { lookupNullifierHash: registeredLookup(signer) })
 
 		expect(result.nullifierHash).toBe('0x1234')
-		expect(result.address).toBe(signer.address.toLowerCase())
+		expect(result.address).toBe(signer.address)
 	})
 
 	it('signs bodyless GET requests with an empty-body digest', async () => {
