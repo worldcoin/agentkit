@@ -96,6 +96,50 @@ describe('createAgentkitHooks', () => {
 		expect(requests[0]!.body).toBeNull()
 	})
 
+	it('verifies a bodyless GET that carries a JSON content type', async () => {
+		const requests: Request[] = []
+		const hooks = createAgentkitHooksInternal(
+			{},
+			{
+				verify: async request => {
+					requests.push(request)
+					return VERIFIED
+				},
+			}
+		)
+
+		await expect(
+			hooks.requestHook({
+				adapter: createAdapter({ method: 'GET', body: undefined, contentType: 'application/json' }),
+				path: '/protected',
+			})
+		).resolves.toEqual({ grantAccess: true })
+
+		expect(requests[0]!.body).toBeNull()
+	})
+
+	it('treats a missing body as the signed empty body regardless of content type', async () => {
+		const requests: Request[] = []
+		const hooks = createAgentkitHooksInternal(
+			{},
+			{
+				verify: async request => {
+					requests.push(request)
+					return VERIFIED
+				},
+			}
+		)
+
+		await expect(
+			hooks.requestHook({
+				adapter: createAdapter({ method: 'DELETE', body: undefined, contentType: 'application/json' }),
+				path: '/protected',
+			})
+		).resolves.toEqual({ grantAccess: true })
+
+		expect(await requests[0]!.text()).toBe('')
+	})
+
 	it('ignores requests without a Signature-Input header', async () => {
 		const hooks = createAgentkitHooksInternal({}, dependencies)
 		const adapter = { ...createAdapter(), getHeader: () => undefined }

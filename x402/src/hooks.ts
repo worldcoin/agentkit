@@ -71,16 +71,25 @@ export function createAgentkitHooksInternal(
 		if (!signatureInput) return
 
 		try {
-			const parsedBody = await context.adapter.getBody?.()
-			const contentType = context.adapter.getHeader('content-type')?.split(';', 1)[0]?.trim().toLowerCase()
-			const body =
-				contentType === 'application/json' || contentType?.endsWith('+json')
-					? normalizeAgentkitJsonBody(parsedBody)
-					: normalizeAgentkitBody(parsedBody)
+			// Clients sign the empty body for bodyless requests regardless of content type,
+			// so determine the method first and skip body normalization for GET/HEAD.
+			const method = context.adapter.getMethod().toUpperCase()
+			const isBodyless = method === 'GET' || method === 'HEAD'
+
+			let body = ''
+			if (!isBodyless) {
+				const parsedBody = await context.adapter.getBody?.()
+				const contentType = context.adapter.getHeader('content-type')?.split(';', 1)[0]?.trim().toLowerCase()
+				if (parsedBody !== undefined) {
+					body =
+						contentType === 'application/json' || contentType?.endsWith('+json')
+							? normalizeAgentkitJsonBody(parsedBody)
+							: normalizeAgentkitBody(parsedBody)
+				}
+			}
 
 			// Rebuild the request core verifies against from what actually arrived: the real
 			// method and URL, the signature headers, and the re-normalized body bytes.
-			const method = context.adapter.getMethod().toUpperCase()
 			const headers = new Headers({ [AGENTKIT_SIGNATURE_INPUT_HEADER]: signatureInput })
 			const signatureHeader = context.adapter.getHeader(AGENTKIT_SIGNATURE_HEADER)
 			if (signatureHeader) headers.set(AGENTKIT_SIGNATURE_HEADER, signatureHeader)
@@ -91,7 +100,7 @@ export function createAgentkitHooksInternal(
 				method,
 				headers,
 				// GET/HEAD requests cannot carry a body; core digests the empty byte string.
-				...(method === 'GET' || method === 'HEAD' ? {} : { body }),
+				...(isBodyless ? {} : { body }),
 			})
 			const { nullifierHash: humanId, address } = await verify(verificationRequest)
 
