@@ -30,6 +30,9 @@ export const CLOCK_SKEW_SECONDS = 5
 const MAX_HEADER_LENGTH = 4096
 const COVERED_COMPONENTS = '("@method" "@authority" "@path" "@query" "content-digest")'
 const KEYID_PATTERN = /^0x[0-9a-f]{40}$/
+// Closed profile: HTTP methods are letters only. This also keeps caller-supplied
+// method strings from injecting lines into the signature base.
+const METHOD_PATTERN = /^[A-Za-z]+$/
 const TIMESTAMP = '(0|[1-9][0-9]{0,14})'
 const SIGNATURE_PARAMS_PATTERN = new RegExp(
 	`^\\("@method" "@authority" "@path" "@query" "content-digest"\\);created=${TIMESTAMP};expires=${TIMESTAMP};keyid="(0x[0-9a-f]{40})";tag="agentkit"$`
@@ -70,6 +73,8 @@ export interface CreateSignatureHeadersInput {
 }
 
 export function deriveComponents(method: string, url: string | URL) {
+	if (!METHOD_PATTERN.test(method)) throw new Error('Invalid HTTP method')
+
 	const parsed = typeof url === 'string' ? new URL(url) : url
 	return {
 		method: method.toUpperCase(),

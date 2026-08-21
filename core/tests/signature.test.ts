@@ -45,6 +45,14 @@ describe('deriveComponents', () => {
 	it('uses the root path for a bare origin', () => {
 		expect(deriveComponents('GET', 'https://api.example.com').path).toBe('/')
 	})
+
+	it('rejects methods that could inject lines into the signature base', () => {
+		expect(() => deriveComponents('POST\n"@authority": evil.com', 'https://api.example.com')).toThrow(
+			'Invalid HTTP method'
+		)
+		expect(() => deriveComponents('GE T', 'https://api.example.com')).toThrow('Invalid HTTP method')
+		expect(() => deriveComponents('', 'https://api.example.com')).toThrow('Invalid HTTP method')
+	})
 })
 
 describe('computeContentDigest', () => {
