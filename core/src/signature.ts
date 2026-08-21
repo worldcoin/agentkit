@@ -25,7 +25,8 @@ export const SIGNATURE_HEADER = 'Signature'
 export const CONTENT_DIGEST_HEADER = 'Content-Digest'
 export const SIGNATURE_LABEL = 'agentkit'
 export const MAX_SIGNATURE_AGE_SECONDS = 300
-export const CLOCK_SKEW_SECONDS = 5
+// Tolerates created timestamps up to 30s in the future from out-of-sync client clocks.
+export const CLOCK_SKEW_SECONDS = 30
 
 const MAX_HEADER_LENGTH = 4096
 const COVERED_COMPONENTS = '("@method" "@authority" "@path" "@query" "content-digest")'

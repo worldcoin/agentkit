@@ -149,7 +149,7 @@ describe('verifyRequest', () => {
 			'Signature created timestamp is in the future'
 		)
 
-		const skewed = await signedRequest({ now: NOW + 3 })
+		const skewed = await signedRequest({ now: NOW + 30 })
 		const result = await verifyRequest(skewed.request, { ...registered(skewed.account), now: () => NOW })
 		expect(result.nullifierHash).toBe('0x1234')
 	})
