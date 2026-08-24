@@ -83,8 +83,26 @@ export function createAgentkitHooks(options: CreateAgentkitHooksOptions) {
 				return
 			}
 
-			if (storage?.recordNonce) {
-				await storage.recordNonce(payload.nonce)
+			const nonceExpiration = getNonceExpiration(payload)
+			if (nonceExpiration.getTime() <= Date.now()) {
+				onEvent?.({ type: 'validation_failed', resource: context.path, error: 'Message expired' })
+				return
+			}
+
+			if (storage?.consumeNonce) {
+				const consumed = await storage.consumeNonce(payload.nonce, nonceExpiration)
+				if (!consumed) {
+					onEvent?.({
+						type: 'validation_failed',
+						resource: context.path,
+						error: 'Nonce validation failed (possible replay attack)',
+					})
+					return
+				}
+			} else {
+				// Backwards-compatible path for existing storage implementations.
+				// This cannot guarantee atomic replay protection; implement consumeNonce instead.
+				await storage?.recordNonce?.(payload.nonce)
 			}
 
 			const humanId = await agentBook.lookupHuman(verification.address)
@@ -180,6 +198,14 @@ export function createAgentkitHooks(options: CreateAgentkitHooksOptions) {
 			: undefined
 
 	return { requestHook, verifyFailureHook }
+}
+
+const DEFAULT_NONCE_MAX_AGE_MS = 5 * 60 * 1000
+
+function getNonceExpiration(payload: { issuedAt: string; expirationTime?: string }): Date {
+	const maxAgeExpiration = new Date(payload.issuedAt).getTime() + DEFAULT_NONCE_MAX_AGE_MS
+	const explicitExpiration = payload.expirationTime ? new Date(payload.expirationTime).getTime() : Infinity
+	return new Date(Math.min(maxAgeExpiration, explicitExpiration))
 }
 
 function extractPayer(payload: Record<string, unknown>): string | null {
