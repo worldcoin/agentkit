@@ -38,4 +38,7 @@ ignore = [
   "RUSTSEC-2025-0141", # Unmaintained `bincode`, feature complete for now (2026-01-15)
   "RUSTSEC-2025-0057", # Unmaintained `fxhash` (2025-09-05)
   "RUSTSEC-2026-0173", # Unmaintained `proc-macro-error2`, build-time dep via alloy-sol-macro (2026-06-16)
+  "RUSTSEC-2026-0247", # Unmaintained `bitmaps`, dep of `im` (same provekit tree) (2026-08-24)
+  "RUSTSEC-2026-0248", # Unmaintained `im`, via provekit's Noir compiler fork under walletkit-core (2026-08-24)
+  "RUSTSEC-2026-0251", # Unmaintained `sized-chunks`, dep of `im` (same provekit tree) (2026-08-24)
 ]
