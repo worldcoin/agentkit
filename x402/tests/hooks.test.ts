@@ -1,21 +1,24 @@
 import { getAddress } from 'viem'
 import { describe, expect, it } from 'bun:test'
 import type { VerifiedAgentRequest } from '@worldcoin/agentkit-core'
-import { AgentKitStorage } from '../src/storage'
+import { AgentKitStorage, InMemoryAgentKitStorage } from '../src/storage'
 import { createAgentkitHooksInternal } from '../src/hooks'
 
 const ADDRESS = '0x1234567890abcdef1234567890abcdef12345678'
 const URL_ = 'https://agentkit.example/protected'
 const SIGNATURE_INPUT =
-	'agentkit=("@method" "@authority" "@path" "@query" "content-digest");created=1755600000;expires=1755600300;keyid="0x1234567890abcdef1234567890abcdef12345678";tag="agentkit"'
+	'agentkit=("@method" "@authority" "@path" "@query" "content-digest");created=1755600000;expires=1755600300;nonce="mAyU1DSTCXHDXqzm5g1D3A==";keyid="0x1234567890abcdef1234567890abcdef12345678";tag="agentkit"'
 const SIGNATURE = `agentkit=:${'A'.repeat(87)}=:`
 const CONTENT_DIGEST = 'sha-256=:47DEQpj8HBSa+/TImW+5JCeuQeRkm5NMpJWZG3hSuFU=:'
 
+// A live window, so nonce stores do not prune the fixture's entry as already expired.
+const NOW = Math.floor(Date.now() / 1000)
 const VERIFIED: VerifiedAgentRequest = {
 	nullifierHash: 'human-1',
 	address: ADDRESS,
-	created: 1755600000,
-	expires: 1755600300,
+	nonce: 'mAyU1DSTCXHDXqzm5g1D3A==',
+	created: NOW,
+	expires: NOW + 300,
 }
 
 type AdapterOptions = {
@@ -246,6 +249,48 @@ describe('createAgentkitHooks', () => {
 		})
 
 		expect(verifyResult).toEqual({ recovered: true, result: { isValid: true, payer: checksummed } })
+	})
+
+	it('rejects a replayed nonce when storage implements tryRecordNonce', async () => {
+		const events: Array<Record<string, string>> = []
+		const hooks = createAgentkitHooksInternal(
+			{ storage: new InMemoryAgentKitStorage(), onEvent: event => events.push(event as Record<string, string>) },
+			dependencies
+		)
+
+		await expect(hooks.requestHook({ adapter: createAdapter(), path: '/protected' })).resolves.toEqual({
+			grantAccess: true,
+		})
+		await expect(hooks.requestHook({ adapter: createAdapter(), path: '/protected' })).resolves.toBeUndefined()
+
+		expect(events.filter(event => event.type === 'validation_failed')).toEqual([
+			{ type: 'validation_failed', resource: '/protected', error: 'Signature nonce already used' },
+		])
+	})
+
+	it('records the verified nonce with its expiry exactly once on success', async () => {
+		const recorded: Array<{ nonce: string; expiresAt: number }> = []
+		const storage: AgentKitStorage = {
+			tryIncrementUsage: async () => true,
+			tryRecordNonce: async (nonce, expiresAt) => {
+				recorded.push({ nonce, expiresAt })
+				return true
+			},
+		}
+		const hooks = createAgentkitHooksInternal({ storage }, dependencies)
+
+		await hooks.requestHook({ adapter: createAdapter(), path: '/protected' })
+
+		expect(recorded).toEqual([{ nonce: VERIFIED.nonce, expiresAt: VERIFIED.expires }])
+	})
+
+	it('still grants access when storage does not implement nonce tracking', async () => {
+		const storage: AgentKitStorage = { tryIncrementUsage: async () => true }
+		const hooks = createAgentkitHooksInternal({ mode: { type: 'free-trial', uses: 3 }, storage }, dependencies)
+
+		await expect(hooks.requestHook({ adapter: createAdapter(), path: '/protected' })).resolves.toEqual({
+			grantAccess: true,
+		})
 	})
 
 	it('reports an unregistered signer separately from a malformed signature', async () => {

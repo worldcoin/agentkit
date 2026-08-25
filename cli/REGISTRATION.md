@@ -62,4 +62,4 @@ After registration, pass the HTTP method, full URL, and exact UTF-8 request body
 agentkit prove POST 'https://api.example.com/data' '<exact-request-body>'
 ```
 
-Omit the body argument for a request with no body. The command does not create a missing key and will not sign for an unregistered identity. On success, copy the returned `Content-Digest`, `Signature-Input`, and `Signature` header values onto the retry unmodified, and send it with the exact same method, URL, and body. Signed headers expire after five minutes — run `prove` again for each request.
+Omit the body argument for a request with no body. The command does not create a missing key and will not sign for an unregistered identity. On success, copy the returned `Content-Digest`, `Signature-Input`, and `Signature` header values onto the retry unmodified, and send it with the exact same method, URL, and body. Signed headers expire after five minutes and are single-use — run `prove` again for each request.

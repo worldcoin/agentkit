@@ -56,7 +56,7 @@ describe('createAgentkitClient', () => {
 		expect(headers['Content-Digest']).toMatch(/^sha-256=:[A-Za-z0-9+/]{43}=:$/)
 		expect(headers['Signature-Input']).toMatch(
 			new RegExp(
-				`^agentkit=\\("@method" "@authority" "@path" "@query" "content-digest"\\);created=\\d+;expires=\\d+;keyid="${ADDRESS.toLowerCase()}";tag="agentkit"$`
+				`^agentkit=\\("@method" "@authority" "@path" "@query" "content-digest"\\);created=\\d+;expires=\\d+;nonce="[^"]+";keyid="${ADDRESS.toLowerCase()}";tag="agentkit"$`
 			)
 		)
 		expect(headers.Signature).toMatch(/^agentkit=:[A-Za-z0-9+/]{87}=:$/)

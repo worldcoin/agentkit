@@ -77,7 +77,7 @@ Signature: <returned Signature>
 
 The retried method, URL, and body must exactly match what was passed to `prove`. In particular, if JSON was compacted before signing, send that compact form on the retry.
 
-Signed headers expire after five minutes. Run `prove` again for every request — never reuse headers across different requests or after any change to the request.
+Signed headers expire after five minutes and each set is valid for one request only. Run `prove` again for every request — never reuse headers across requests, retries, or after any change to the request.
 
 If the service grants access, return the resource without paying. If it responds with another 402, interpret the access mode before deciding whether to pay.
 
@@ -123,4 +123,4 @@ Report the signing failure and retry once. Never ask the user to paste the priva
 
 ### Server rejects the signature
 
-Verify that all three headers were copied unmodified, that the retry used the exact method, URL, and body passed to `prove`, and that the headers are fresh — they expire after five minutes. Run `prove` again after any change or rejection. If a second freshly signed retry is rejected and the service still requires payment, continue with the normal x402 payment flow.
+Verify that all three headers were copied unmodified, that the retry used the exact method, URL, and body passed to `prove`, and that the headers are fresh — they expire after five minutes and each set is valid for one request only. Run `prove` again after any change or rejection. If a second freshly signed retry is rejected and the service still requires payment, continue with the normal x402 payment flow.

@@ -78,7 +78,7 @@ Behind a proxy, the URL that `verify` sees must reflect the public host the clie
 
 Do not use a parsed JSON object as a replacement for the original body bytes.
 
-A byte-identical request can be replayed until its signature expires (at most five minutes). Nonce-based single-use signatures are a planned follow-up. Until then, if duplicate execution would be harmful for the endpoint, keep it idempotent or deduplicate at the application level (e.g. on a request ID inside the signed body).
+Every signature carries a single-use nonce. Zero-config `verify(request)` does not enforce it (a byte-identical request can be replayed until the signature expires, at most five minutes). For endpoints where that window is unacceptable, use `verifyRequest(request, { tryRecordNonce })` and back it with a store that records each nonce atomically exactly once (e.g. Redis `SET nonce 1 NX EX 300`); a `false` return rejects the request as a replay.
 
 ## Keep the change local
 

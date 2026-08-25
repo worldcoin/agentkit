@@ -51,6 +51,7 @@ For most production integrations:
     - registered agent gets the intended behavior
     - unregistered agent falls back to normal payment
     - the client signs the request and retries with the `Signature-Input`, `Signature`, and `Content-Digest` headers
+    - a replayed signature (same nonce) is rejected when storage implements `tryRecordNonce`
     - usage storage behaves as expected
 
 ## Ground rules

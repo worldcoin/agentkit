@@ -102,7 +102,12 @@ export function createAgentkitHooksInternal(
 				// GET/HEAD requests cannot carry a body; core digests the empty byte string.
 				...(isBodyless ? {} : { body }),
 			})
-			const { nullifierHash: humanId, address } = await verify(verificationRequest)
+			const { nullifierHash: humanId, address, nonce, expires } = await verify(verificationRequest)
+
+			if (storage?.tryRecordNonce && !(await storage.tryRecordNonce(nonce, expires))) {
+				onEvent?.({ type: 'validation_failed', resource: context.path, error: 'Signature nonce already used' })
+				return
+			}
 
 			if (mode.type === 'free') {
 				onEvent?.({ type: 'agent_verified', resource: context.path, address, humanId })

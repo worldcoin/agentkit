@@ -42,4 +42,4 @@ agentkit prove GET 'https://api.example.com/data'
 
 The command requires the key created by `agentkit register` and confirms that its address is registered before signing. It returns a `headers` object with three values — `Content-Digest`, `Signature-Input`, and `Signature` (RFC 9421 HTTP message signatures) — to copy onto the request unmodified.
 
-The signature is bound to the method, host, path, query string, and body, and expires after five minutes. Send the request with the exact same method, URL, and byte-identical body, and run `prove` again for each new request.
+The signature is bound to the method, host, path, query string, and body, expires after five minutes, and carries a single-use nonce. Send the request with the exact same method, URL, and byte-identical body, and run `prove` again for every request — signed headers must never be reused.

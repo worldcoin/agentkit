@@ -5,10 +5,10 @@ import { bytesToHex, hexToBytes, sha256, type Hex } from 'viem'
  *
  * The profile is closed: exactly one signature labeled `agentkit`, covering exactly
  * `("@method" "@authority" "@path" "@query" "content-digest")`, with the parameters
- * `created`, `expires`, `keyid` (lowercase agent address) and `tag="agentkit"` in that
- * order. The signature is a 65-byte EIP-191 `personal_sign` over the UTF-8 signature
- * base, transported as standard padded base64. Anything outside this exact shape is
- * rejected.
+ * `created`, `expires`, `nonce`, `keyid` (lowercase agent address) and `tag="agentkit"`
+ * in that order. The signature is a 65-byte EIP-191 `personal_sign` over the UTF-8
+ * signature base, transported as standard padded base64. Anything outside this exact
+ * shape is rejected.
  *
  * Example signature base for `POST https://api.example.com/data?x=1` with body `{"a":1}`:
  *
@@ -17,7 +17,7 @@ import { bytesToHex, hexToBytes, sha256, type Hex } from 'viem'
  *   "@path": /data
  *   "@query": ?x=1
  *   "content-digest": sha-256=:AVq9f1zFei3ZS3WQ8ErYCEJzkF7jPsXOvq5iJ2qX+GI=:
- *   "@signature-params": ("@method" "@authority" "@path" "@query" "content-digest");created=1755600000;expires=1755600300;keyid="0x0123456789abcdef0123456789abcdef01234567";tag="agentkit"
+ *   "@signature-params": ("@method" "@authority" "@path" "@query" "content-digest");created=1755600000;expires=1755600300;nonce="mAyU1DSTCXHDXqzm5g1D3A==";keyid="0x0123456789abcdef0123456789abcdef01234567";tag="agentkit"
  */
 
 export const SIGNATURE_INPUT_HEADER = 'Signature-Input'
@@ -34,9 +34,11 @@ const KEYID_PATTERN = /^0x[0-9a-f]{40}$/
 // Closed profile: HTTP methods are letters only. This also keeps caller-supplied
 // method strings from injecting lines into the signature base.
 const METHOD_PATTERN = /^[A-Za-z]+$/
+// Printable ASCII excluding `"` and `\`, so the value never needs sf-string escaping.
+const NONCE_PATTERN = /^[\x20-\x21\x23-\x5B\x5D-\x7E]{16,256}$/
 const TIMESTAMP = '(0|[1-9][0-9]{0,14})'
 const SIGNATURE_PARAMS_PATTERN = new RegExp(
-	`^\\("@method" "@authority" "@path" "@query" "content-digest"\\);created=${TIMESTAMP};expires=${TIMESTAMP};keyid="(0x[0-9a-f]{40})";tag="agentkit"$`
+	`^\\("@method" "@authority" "@path" "@query" "content-digest"\\);created=${TIMESTAMP};expires=${TIMESTAMP};nonce="([\\x20-\\x21\\x23-\\x5B\\x5D-\\x7E]{16,256})";keyid="(0x[0-9a-f]{40})";tag="agentkit"$`
 )
 // 65 signature bytes and 32 digest bytes always encode to these exact padded lengths.
 const SIGNATURE_VALUE_PATTERN = /^agentkit=:([A-Za-z0-9+/]{87}=):$/
@@ -45,6 +47,7 @@ const CONTENT_DIGEST_PATTERN = /^sha-256=:([A-Za-z0-9+/]{43}=):$/
 export interface SignatureParams {
 	created: number
 	expires: number
+	nonce: string
 	keyid: string
 }
 
@@ -71,6 +74,8 @@ export interface CreateSignatureHeadersInput {
 	/** Unix seconds; defaults to the current time. */
 	now?: number
 	expiresInSeconds?: number
+	/** Single-use random value; defaults to 16 fresh random bytes. */
+	nonce?: string
 }
 
 export function deriveComponents(method: string, url: string | URL) {
@@ -90,13 +95,14 @@ export function computeContentDigest(bodyBytes: Uint8Array): string {
 	return `sha-256=:${encodeBase64(sha256(bodyBytes, 'bytes'))}:`
 }
 
-export function serializeSignatureParams({ created, expires, keyid }: SignatureParams): string {
+export function serializeSignatureParams({ created, expires, nonce, keyid }: SignatureParams): string {
 	if (!Number.isInteger(created) || created < 0 || !Number.isInteger(expires) || expires <= created) {
 		throw new Error('Signature params require integer timestamps with expires after created')
 	}
+	if (!NONCE_PATTERN.test(nonce)) throw new Error('Signature nonce must be 16-256 printable ASCII characters')
 	if (!KEYID_PATTERN.test(keyid)) throw new Error('Signature keyid must be a lowercase 0x address')
 
-	return `${COVERED_COMPONENTS};created=${created};expires=${expires};keyid="${keyid}";tag="${SIGNATURE_LABEL}"`
+	return `${COVERED_COMPONENTS};created=${created};expires=${expires};nonce="${nonce}";keyid="${keyid}";tag="${SIGNATURE_LABEL}"`
 }
 
 export function buildSignatureBase(input: {
@@ -130,7 +136,7 @@ export function parseSignatureInput(raw: string): ParsedSignatureInput {
 	const expires = Number(match[2])
 	if (expires <= created) throw new Error('Signature expires must be after created')
 
-	return { rawParams, created, expires, keyid: match[3]! }
+	return { rawParams, created, expires, nonce: match[3]!, keyid: match[4]! }
 }
 
 export function parseSignatureHeader(raw: string): Hex {
@@ -164,9 +170,10 @@ export async function createSignatureHeaders(input: CreateSignatureHeadersInput)
 	const contentDigest = computeContentDigest(bodyBytes)
 	const created = input.now ?? Math.floor(Date.now() / 1000)
 	const expires = created + (input.expiresInSeconds ?? MAX_SIGNATURE_AGE_SECONDS)
+	const nonce = input.nonce ?? generateNonce()
 	const keyid = input.address.toLowerCase()
 
-	const signatureParams = serializeSignatureParams({ created, expires, keyid })
+	const signatureParams = serializeSignatureParams({ created, expires, nonce, keyid })
 	const base = buildSignatureBase({ method: input.method, url: input.url, contentDigest, signatureParams })
 
 	const signature = await input.signMessage(base)
@@ -177,6 +184,12 @@ export async function createSignatureHeaders(input: CreateSignatureHeadersInput)
 		'Signature-Input': `${SIGNATURE_LABEL}=${signatureParams}`,
 		Signature: `${SIGNATURE_LABEL}=:${encodeBase64(hexToBytes(signature as Hex))}:`,
 	}
+}
+
+function generateNonce(): string {
+	const bytes = new Uint8Array(16)
+	crypto.getRandomValues(bytes)
+	return encodeBase64(bytes)
 }
 
 const BASE64_ALPHABET = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/'

@@ -16,6 +16,7 @@ import {
 export type VerifiedAgentRequest = {
 	nullifierHash: string
 	address: string
+	nonce: string
 	created: number
 	expires: number
 }
@@ -23,6 +24,13 @@ export type VerifiedAgentRequest = {
 type VerifyRequestDependencies = {
 	recoverAddress?: (signatureBase: string, signature: Hex) => Promise<string>
 	lookupNullifierHash?: (address: string) => Promise<string | null>
+	/**
+	 * Atomically record the nonce and return whether it was fresh. Return false for a
+	 * nonce that was already recorded; the request is then rejected as a replay.
+	 * Implementations must combine check and record in one atomic step
+	 * (e.g. Redis `SET nonce 1 NX EX 300`).
+	 */
+	tryRecordNonce?: (details: { nonce: string; address: string; created: number; expires: number }) => Promise<boolean>
 	/** Unix seconds; injectable for tests. */
 	now?: () => number
 }
@@ -90,6 +98,18 @@ export async function verifyRequest(
 	// The wire format carries a lowercase keyid; surface the EIP-55 checksummed form.
 	const address = getAddress(params.keyid)
 
+	// Record only after the signature is proven, so junk requests cannot poison the store;
+	// record before the AgentBook lookup, so replays cost no RPC.
+	if (dependencies.tryRecordNonce) {
+		const fresh = await dependencies.tryRecordNonce({
+			nonce: params.nonce,
+			address,
+			created: params.created,
+			expires: params.expires,
+		})
+		if (!fresh) throw verificationError('Signature nonce has already been used', 'NONCE_REUSED', address)
+	}
+
 	const lookup = dependencies.lookupNullifierHash ?? (signer => lookupNullifierHash(signer))
 	const nullifierHash = await lookup(address)
 	if (!nullifierHash) {
@@ -99,6 +119,7 @@ export async function verifyRequest(
 	return {
 		nullifierHash,
 		address,
+		nonce: params.nonce,
 		created: params.created,
 		expires: params.expires,
 	}

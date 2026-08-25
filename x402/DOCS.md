@@ -28,7 +28,7 @@ npx @worldcoin/agentkit-cli register
 
 1. The client calls the protected resource normally.
 2. The server returns `402 Payment Required` with `extensions.agentkit`.
-3. The client signs the request under the AgentKit RFC 9421 profile — binding the method, host, path, query string, a digest of the normalized body, and a five-minute validity window — then retries with the `Signature-Input`, `Signature`, and `Content-Digest` headers.
+3. The client signs the request under the AgentKit RFC 9421 profile — binding the method, host, path, query string, a digest of the normalized body, a five-minute validity window, and a single-use nonce — then retries with the `Signature-Input`, `Signature`, and `Content-Digest` headers.
 4. The server calls Core's `verify(request)`, which rebuilds the signature base from the request it actually received, recovers the signer, and resolves its human nullifier from AgentBook on World Chain.
 5. The hooks grant access, consume a trial use, or prepare a discounted payment according to the configured mode.
 
@@ -77,7 +77,7 @@ const response = await fetch(url, {
 })
 ```
 
-When using `createHeaders` directly, the request must use the exact method and URL that were signed, and the sent body must match `normalizeAgentkitBody(body)` exactly. Signed headers expire after five minutes — create fresh headers for every request.
+When using `createHeaders` directly, the request must use the exact method and URL that were signed, and the sent body must match `normalizeAgentkitBody(body)` exactly. Signed headers expire after five minutes and are single-use — create fresh headers for every request.
 
 ## Server hooks
 
@@ -229,10 +229,14 @@ Returns `requestHook` and, only for discount mode, `verifyFailureHook`.
 ```typescript
 interface AgentKitStorage {
 	tryIncrementUsage(endpoint: string, humanId: string, limit: number): Promise<boolean>
+
+	tryRecordNonce?(nonce: string, expiresAt: number): Promise<boolean>
 }
 ```
 
 The check and increment must be atomic.
+
+When `tryRecordNonce` is implemented, the hooks reject any signature whose nonce was recorded before, making every signed request single-use. The call must atomically record the nonce and return `true` only when it was fresh — one operation, not check-then-write (e.g. Redis `SET nonce 1 NX EX 300`). Entries may be discarded once `expiresAt` (unix seconds) has passed, since expired signatures are rejected by the time-window check regardless; the store therefore only ever holds the last five minutes of nonces. `InMemoryAgentKitStorage` implements this for single-process servers; multi-instance deployments need a shared store for enforcement to be meaningful.
 
 ### Body helpers
 
@@ -243,8 +247,8 @@ The check and increment must be atomic.
 
 ## Security considerations
 
-- The signature binds the method, host, path, query string, a digest of the normalized body, and a five-minute validity window. The server rebuilds every covered component from the request it actually received, so a signature cannot be replayed against a different service, endpoint, or payload.
-- A byte-identical request can be replayed until its signature expires (at most five minutes). Nonce-based single-use signatures are a planned follow-up; until then, keep protected operations idempotent where duplicate execution would be harmful.
+- The signature binds the method, host, path, query string, a digest of the normalized body, a five-minute validity window, and a single-use nonce. The server rebuilds every covered component from the request it actually received, so a signature cannot be replayed against a different service, endpoint, or payload.
+- Provide storage with `tryRecordNonce` to make each signature valid for exactly one request. Without it, a byte-identical request can be replayed until its signature expires (at most five minutes) — keep protected operations idempotent in that configuration.
 - Core uses recoverable EIP-191 EOA signatures over the RFC 9421 signature base, and the recovered signer must match the `keyid` address. Smart-contract and counterfactual-wallet signatures are not yet supported.
 - Addresses surfaced by the SDK (`verifyRequest` results, hook events, the recovered discount payer) are EIP-55 checksummed; the wire-format `keyid` is lowercase. Always compare addresses case-insensitively.
 - The signature binds `@authority`, so the URL the server verifies against must reflect the public host. Behind a proxy, make sure the framework applies `X-Forwarded-Host` (or equivalent) before the hook reads the request URL.
@@ -257,7 +261,7 @@ The check and increment must be atomic.
 ### Signature verification fails
 
 - Confirm all three headers are present: `Signature-Input`, `Signature`, and `Content-Digest`.
-- Confirm the headers were copied unmodified and the signature has not expired (five-minute window).
+- Confirm the headers were copied unmodified and the signature has not expired (five-minute window) or been used before — each set of signed headers is valid for one request when nonce storage is configured.
 - Confirm the retry uses the exact method and URL (including the query string) that were signed.
 - Confirm the retried body is the same normalized body that was signed.
 - Behind a proxy, confirm the server sees the public host the client signed, not an internal one.

@@ -69,6 +69,7 @@ describe('verifyRequest', () => {
 		expect(result.address).toBe(account.address)
 		expect(result.created).toBe(NOW)
 		expect(result.expires).toBe(NOW + 300)
+		expect(result.nonce.length).toBeGreaterThanOrEqual(16)
 		expect(lookups).toEqual([account.address])
 		expect(await request.text()).toBe('{"a":1}')
 	})
@@ -160,6 +161,44 @@ describe('verifyRequest', () => {
 		await expect(verifyRequest(request, registered(account))).rejects.toThrow(
 			'Signature does not match the keyid address'
 		)
+	})
+
+	it('records the nonce once and rejects a replay via tryRecordNonce', async () => {
+		const { account, request } = await signedRequest()
+		const recorded: Array<{ nonce: string; address: string; created: number; expires: number }> = []
+
+		const result = await verifyRequest(request, {
+			...registered(account),
+			tryRecordNonce: async details => {
+				recorded.push(details)
+				return true
+			},
+		})
+
+		expect(recorded).toEqual([
+			{ nonce: result.nonce, address: account.address, created: NOW, expires: NOW + 300 },
+		])
+
+		const replay = await signedRequest()
+		await expect(
+			verifyRequest(replay.request, { ...registered(replay.account), tryRecordNonce: async () => false })
+		).rejects.toThrow('Signature nonce has already been used')
+	})
+
+	it('does not consume a nonce for a request whose signature fails', async () => {
+		const { account, request } = await signedRequest({ requestBody: '{"a":2}' })
+		const recorded: string[] = []
+
+		await expect(
+			verifyRequest(request, {
+				...registered(account),
+				tryRecordNonce: async details => {
+					recorded.push(details.nonce)
+					return true
+				},
+			})
+		).rejects.toThrow('Content-Digest does not match the request body')
+		expect(recorded).toEqual([])
 	})
 
 	it('throws when the recovered signer is not registered', async () => {
