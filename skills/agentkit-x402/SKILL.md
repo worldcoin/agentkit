@@ -16,7 +16,7 @@ Fall back to the normal x402 payment flow only when:
 - the service rejects the signature; or
 - free-trial or discount access is exhausted.
 
-The lowercase `agentkit` name is only the x402 extension key. Never send it as a header. Authentication uses the standard HTTP message signature headers `Signature-Input`, `Signature`, and `Content-Digest`.
+The lowercase `agentkit` name is only the x402 extension key. Never send it as a header. Authentication uses the standard HTTP Message Signatures headers defined by RFC 9421 — `Signature-Input` and `Signature` — plus `Content-Digest` (RFC 9530).
 
 Do not read or request a private key. Do not construct signatures manually. The AgentKit CLI loads the managed identity, confirms that it is registered, and signs the request.
 
