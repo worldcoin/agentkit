@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 import './polyfill.js'
 import { Cli, z } from 'incur'
+import { homedir } from 'node:os'
 import type { Hex } from 'viem'
 import qrcode from 'qrcode-terminal'
 import { worldchain } from 'viem/chains'
@@ -9,7 +10,7 @@ import { createWorldBridgeStore } from '@worldcoin/idkit-core'
 import { solidityEncode } from '@worldcoin/idkit-core/hashing'
 import { createPublicClient, http, decodeAbiParameters } from 'viem'
 import { requestBodyInputSchema, signRequestBody } from './prove.js'
-import { AgentKeyNotFoundError, loadAgentSigner, loadOrCreateAgentIdentity } from './key.js'
+import { AgentKeyNotFoundError, getAgentkitKeyPath, loadAgentSigner, loadOrCreateAgentIdentity } from './key.js'
 
 // ─── Config ──────────────────────────────────────────────────────────────────
 
@@ -36,6 +37,7 @@ const APP_ID = 'app_a7c3e2b6b83927251a0db5345bd7146a'
 const ACTION = 'agentbook-registration'
 const REGISTRATION_RELAY_URL = 'https://x402-worldchain.vercel.app/register'
 const AGENT_BOOK_NETWORK = 'eip155:480'
+const AGENTKIT_KEY_PATH = getAgentkitKeyPath(process.env.XDG_CONFIG_HOME, homedir())
 
 // ─── CLI ─────────────────────────────────────────────────────────────────────
 
@@ -124,7 +126,7 @@ cli.command('register', {
 
 		let agentAddress: `0x${string}`
 		try {
-			const identity = await loadOrCreateAgentIdentity()
+			const identity = await loadOrCreateAgentIdentity(AGENTKIT_KEY_PATH)
 			agentAddress = identity.address
 			if (!c.agent && identity.created) console.log('  \x1b[32m✓ Local identity created\x1b[0m')
 		} catch (err) {
@@ -263,7 +265,7 @@ cli.command('prove', {
 	async run(c) {
 		let signer
 		try {
-			signer = await loadAgentSigner()
+			signer = await loadAgentSigner(AGENTKIT_KEY_PATH)
 		} catch (err) {
 			return c.error({
 				code: err instanceof AgentKeyNotFoundError ? 'KEY_NOT_FOUND' : 'IDENTITY_LOAD_FAILED',

@@ -13,13 +13,13 @@ afterEach(async () => {
 
 describe('getAgentkitKeyPath', () => {
 	test('uses XDG_CONFIG_HOME when it is absolute', () => {
-		expect(getAgentkitKeyPath({ XDG_CONFIG_HOME: '/tmp/custom-config' }, '/tmp/home')).toBe(
+		expect(getAgentkitKeyPath('/tmp/custom-config', '/tmp/home')).toBe(
 			'/tmp/custom-config/agentkit/key'
 		)
 	})
 
 	test('falls back to the home config directory for an invalid relative XDG_CONFIG_HOME', () => {
-		expect(getAgentkitKeyPath({ XDG_CONFIG_HOME: 'relative' }, '/tmp/home')).toBe('/tmp/home/.config/agentkit/key')
+		expect(getAgentkitKeyPath('relative', '/tmp/home')).toBe('/tmp/home/.config/agentkit/key')
 	})
 })
 

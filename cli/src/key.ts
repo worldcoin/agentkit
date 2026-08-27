@@ -1,6 +1,5 @@
 import { randomUUID } from 'node:crypto'
 import { chmod, link, mkdir, readFile, unlink, writeFile } from 'node:fs/promises'
-import { homedir } from 'node:os'
 import { dirname, isAbsolute, join } from 'node:path'
 import { generatePrivateKey, privateKeyToAccount } from 'viem/accounts'
 
@@ -17,16 +16,13 @@ export type AgentSigner = {
 
 export class AgentKeyNotFoundError extends Error {}
 
-export function getAgentkitKeyPath(
-	env: NodeJS.ProcessEnv = process.env,
-	homeDirectory: string = homedir()
-): string {
-	const configuredHome = env.XDG_CONFIG_HOME?.trim()
+export function getAgentkitKeyPath(xdgConfigHome: string | undefined, homeDirectory: string): string {
+	const configuredHome = xdgConfigHome?.trim()
 	const configHome = configuredHome && isAbsolute(configuredHome) ? configuredHome : join(homeDirectory, '.config')
 	return join(configHome, 'agentkit', 'key')
 }
 
-export async function loadOrCreateAgentIdentity(keyPath: string = getAgentkitKeyPath()): Promise<AgentIdentity> {
+export async function loadOrCreateAgentIdentity(keyPath: string): Promise<AgentIdentity> {
 	const keyDirectory = dirname(keyPath)
 	await mkdir(keyDirectory, { recursive: true, mode: 0o700 })
 	await chmod(keyDirectory, 0o700)
@@ -55,7 +51,7 @@ export async function loadOrCreateAgentIdentity(keyPath: string = getAgentkitKey
 	}
 }
 
-export async function loadAgentSigner(keyPath: string = getAgentkitKeyPath()): Promise<AgentSigner> {
+export async function loadAgentSigner(keyPath: string): Promise<AgentSigner> {
 	let privateKey: `0x${string}`
 	try {
 		privateKey = await readPrivateKey(keyPath)
