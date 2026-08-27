@@ -3,7 +3,7 @@ import { mkdtemp, readFile, rm, stat, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { recoverMessageAddress } from 'viem'
-import { getAgentkitKeyPath, loadAgentSigner, loadOrCreateAgentIdentity } from '../src/key.js'
+import { AgentKeyNotFoundError, getAgentkitKeyPath, loadAgentSigner, loadOrCreateAgentIdentity } from '../src/key.js'
 
 const temporaryDirectories: string[] = []
 
@@ -70,12 +70,7 @@ describe('loadOrCreateAgentIdentity', () => {
 	test('does not create a key when loading a signer', async () => {
 		const keyPath = await makeKeyPath()
 
-		try {
-			await loadAgentSigner(keyPath)
-			throw new Error('Expected signer loading to fail')
-		} catch (error) {
-			expect(error).toHaveProperty('code', 'ENOENT')
-		}
+		await expect(loadAgentSigner(keyPath)).rejects.toBeInstanceOf(AgentKeyNotFoundError)
 	})
 })
 

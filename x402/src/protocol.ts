@@ -1,7 +1,7 @@
 import type { AgentkitMode } from './types'
 
 export const AGENTKIT = 'agentkit'
-export const AGENTKIT_HEADER = 'X-AgentKit'
+export const AGENTKIT_HEADER = 'AgentKit'
 
 export interface AgentkitExtension {
 	mode?: AgentkitMode

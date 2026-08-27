@@ -1,6 +1,6 @@
 ---
 name: agentkit-x402
-description: Use when an HTTP 402 Payment Required response contains an `agentkit` extension. Sign the request body with the AgentKit CLI, retry with the hexadecimal signature in `X-AgentKit`, interpret free, free-trial, and discount modes, and fall back to x402 payment only when AgentKit access is unavailable.
+description: Use when an HTTP 402 Payment Required response contains an `agentkit` extension. Sign the request body with the AgentKit CLI, retry with the hexadecimal signature in `AgentKit`, interpret free, free-trial, and discount modes, and fall back to x402 payment only when AgentKit access is unavailable.
 ---
 
 # Authenticate to x402 with AgentKit
@@ -16,7 +16,7 @@ Fall back to the normal x402 payment flow only when:
 - the service rejects the signature; or
 - free-trial or discount access is exhausted.
 
-The lowercase `agentkit` name is only the x402 extension key. Never send it as the authentication header. The request header is `X-AgentKit`.
+The lowercase `agentkit` name is only the x402 extension key. Never send it as the authentication header. The request header is `AgentKit`.
 
 Do not read or request a private key. Do not construct signatures manually. The AgentKit CLI loads the managed identity, confirms that it is registered, and signs the body.
 
@@ -63,14 +63,14 @@ The command:
 - checks that its address is registered in AgentBook; and
 - returns a `signature` field containing a hexadecimal EIP-191 signature.
 
-Use the returned `signature` directly. It is already the complete `X-AgentKit` header value. Do not encode, decode, wrap, or edit it.
+Use the returned `signature` directly. It is already the complete `AgentKit` header value. Do not encode, decode, wrap, or edit it.
 
 ### 3. Retry the original request
 
 Repeat the request with the same method, URL, prepared body, and other headers, adding:
 
 ```text
-X-AgentKit: <signature returned by agentkit prove>
+AgentKit: <signature returned by agentkit prove>
 ```
 
 The retried body must be byte-for-byte identical to the body given to `prove`. In particular, if JSON was compacted before signing, send that compact form on the retry.
@@ -83,11 +83,11 @@ Read `extensions.agentkit.mode` when present:
 
 | Mode         | Behavior                                                                                                                                      |
 | ------------ | --------------------------------------------------------------------------------------------------------------------------------------------- |
-| `free`       | Retry with `X-AgentKit` and no payment.                                                                                                       |
-| `free-trial` | Retry with `X-AgentKit` and no payment until the service reports that the per-human allowance is exhausted. Then use the normal payment flow. |
-| `discount`   | Keep `X-AgentKit` on the request and use the normal x402 payment flow with the discounted amount advertised by the service.                   |
+| `free`       | Retry with `AgentKit` and no payment.                                                                                                       |
+| `free-trial` | Retry with `AgentKit` and no payment until the service reports that the per-human allowance is exhausted. Then use the normal payment flow. |
+| `discount`   | Keep `AgentKit` on the request and use the normal x402 payment flow with the discounted amount advertised by the service.                   |
 
-If no mode is present, try `X-AgentKit` without payment first.
+If no mode is present, try `AgentKit` without payment first.
 
 ## Recover from errors
 
@@ -119,4 +119,4 @@ Report the signing failure and retry once. Never ask the user to paste the priva
 
 ### Server rejects the signature
 
-First verify that the retry used `X-AgentKit`, not `agentkit`, and that its body exactly matches the body passed to `prove`. Recreate the signature after any body change. If a second correctly signed retry is rejected and the service still requires payment, continue with the normal x402 payment flow.
+First verify that the retry used `AgentKit`, not `agentkit`, and that its body exactly matches the body passed to `prove`. Recreate the signature after any body change. If a second correctly signed retry is rejected and the service still requires payment, continue with the normal x402 payment flow.

@@ -1,6 +1,6 @@
 ---
 name: integrate-agentkit
-description: Protect one HTTP endpoint with @worldcoin/agentkit-core. Use this skill when an application must validate X-AgentKit body signatures, identify a registered human, or add AgentKit authentication to an API route.
+description: Protect one HTTP endpoint with @worldcoin/agentkit-core. Use this skill when an application must validate AgentKit body signatures, identify a registered agent, or add AgentKit authentication to an API route.
 ---
 
 # Integrate AgentKit
@@ -37,22 +37,22 @@ const agentkitError = {
 }
 
 export async function POST(request: Request) {
-	let humanId: string
+	let lookupId: string
 
 	try {
-		humanId = await verify(request)
+		lookupId = await verify(request)
 	} catch {
 		return Response.json(agentkitError, { status: 401 })
 	}
 
 	const body = await request.json()
-	return createReport(body, { humanId })
+	return createReport(body, { lookupId })
 }
 ```
 
 Replace `createReport` with the current endpoint logic.
 
-Use the returned nullifier hash as an internal human ID when the access policy needs it. Do not return the nullifier unless the API contract requires it. Do not expose the signer address or private key.
+Use the returned lookup ID as an internal identifier when the access policy needs it. Do not return the lookup ID unless the API contract requires it. Do not expose the signer address or private key.
 
 `verify` clones the request. The endpoint can read the body after successful verification.
 
@@ -72,7 +72,7 @@ Do not return the internal verification error. The internal error can contain an
 
 Pass the original request to `verify`. Do not parse, format, or rebuild the body first.
 
-If the framework does not use Web `Request`, capture the exact body before a body parser changes it. Build one Web `Request` with those exact bytes and the original `X-AgentKit` header.
+If the framework does not use Web `Request`, capture the exact body before a body parser changes it. Build one Web `Request` with those exact bytes and the original `AgentKit` header.
 
 Do not use a parsed JSON object as a replacement for the original body bytes.
 
@@ -88,7 +88,7 @@ Do not use a parsed JSON object as a replacement for the original body bytes.
 
 Test these cases:
 
-1. A request without `X-AgentKit` returns status `401` and the required message.
+1. A request without `AgentKit` returns status `401` and the required message.
 2. A malformed signature returns the same safe error.
 3. An unregistered signer returns the same safe error.
 4. A registered signer can use the endpoint.

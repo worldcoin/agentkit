@@ -15,6 +15,8 @@ export type AgentSigner = {
 	signMessage: (message: string) => Promise<`0x${string}`>
 }
 
+export class AgentKeyNotFoundError extends Error {}
+
 export function getAgentkitKeyPath(
 	env: NodeJS.ProcessEnv = process.env,
 	homeDirectory: string = homedir()
@@ -54,7 +56,17 @@ export async function loadOrCreateAgentIdentity(keyPath: string = getAgentkitKey
 }
 
 export async function loadAgentSigner(keyPath: string = getAgentkitKeyPath()): Promise<AgentSigner> {
-	const account = accountFromPrivateKey(await readPrivateKey(keyPath), keyPath)
+	let privateKey: `0x${string}`
+	try {
+		privateKey = await readPrivateKey(keyPath)
+	} catch (error) {
+		if (isNodeError(error) && error.code === 'ENOENT') {
+			throw new AgentKeyNotFoundError('No AgentKit key is available. Run `agentkit register` first.')
+		}
+		throw error
+	}
+
+	const account = accountFromPrivateKey(privateKey, keyPath)
 	return {
 		address: account.address,
 		signMessage: message => account.signMessage({ message }),

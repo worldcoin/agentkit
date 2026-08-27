@@ -29,8 +29,8 @@ For most production integrations:
 
 - x402 resource server: the protected HTTP route and 402 retry flow
 - facilitator: verifies and settles payment payloads; required for `discount`
-- AgentKit extension: advertises AgentKit support and verifies the request body's `X-AgentKit` signature
-- AgentBook: on-chain registry on World Chain that maps the agent wallet to an anonymous human ID. Lookup is always against World Chain regardless of the payment chain — the caller side is chain-agnostic.
+- AgentKit extension: advertises AgentKit support and verifies the request body's `AgentKit` signature
+- AgentBook: on-chain registry on World Chain that maps the agent wallet to a lookup ID. Lookup is always against World Chain regardless of the payment chain — the caller side is chain-agnostic.
 - storage: per-human usage tracking for `free-trial` and `discount`
 - registration path: separate from request-time verification; use `npx @worldcoin/agentkit-cli --llms` if the developer also needs registration help
 
@@ -50,7 +50,7 @@ For most production integrations:
     - 402 response includes the `agentkit` extension
     - registered agent gets the intended behavior
     - unregistered agent falls back to normal payment
-    - the client signs the normalized body and retries with `X-AgentKit`
+    - the client signs the normalized body and retries with `AgentKit`
     - usage storage behaves as expected
 
 ## Ground rules

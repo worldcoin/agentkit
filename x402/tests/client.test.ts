@@ -40,7 +40,7 @@ function paymentRequired(agentkit = true) {
 }
 
 describe('createAgentkitClient', () => {
-	it('creates an X-AgentKit value by signing the normalized body', async () => {
+	it('creates an AgentKit value by signing the normalized body', async () => {
 		const signer = createSigner()
 		const agentkit = createAgentkitClient({ signer })
 		const body = { hello: 'world', unicode: '你好' }

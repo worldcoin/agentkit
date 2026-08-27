@@ -1,11 +1,13 @@
 import { isHex, recoverMessageAddress, type Hex } from 'viem'
-import { lookupNullifierHash } from './agent-book'
+import { lookupId } from './agent-book'
 
-const AGENTKIT_HEADER = 'X-AgentKit'
+const AGENTKIT_HEADER = 'AgentKit'
+const LOOKUP_ID_CACHE_TTL_MS = 60_000
+const lookupIdCache = new Map<string, { lookupId: string; expiresAt: number }>()
 
 type VerifyRequestDependencies = {
 	recoverAddress?: (body: Uint8Array, signature: Hex) => Promise<string>
-	lookupNullifierHash?: (address: string) => Promise<string | null>
+	lookupId?: (address: string) => Promise<string | null>
 }
 
 export async function verify(request: Request): Promise<string> {
@@ -15,10 +17,10 @@ export async function verify(request: Request): Promise<string> {
 export async function verifyRequest(request: Request, dependencies: VerifyRequestDependencies = {}): Promise<string> {
 	const signature = request.headers.get(AGENTKIT_HEADER)?.trim()
 	if (!signature) {
-		throw verificationError('Missing X-AgentKit header', 'MISSING_HEADER')
+		throw verificationError(`Missing ${AGENTKIT_HEADER} header`, 'MISSING_HEADER')
 	}
-	if (!isHex(signature) || !/^0x[0-9a-fA-F]{130}$/.test(signature)) {
-		throw verificationError('Invalid X-AgentKit signature', 'INVALID_SIGNATURE')
+	if (!isHex(signature)) {
+		throw verificationError(`Invalid ${AGENTKIT_HEADER} signature`, 'INVALID_SIGNATURE')
 	}
 
 	let body: Uint8Array
@@ -36,16 +38,21 @@ export async function verifyRequest(request: Request, dependencies: VerifyReques
 	try {
 		address = await recoverAddress(body, signature)
 	} catch {
-		throw verificationError('Invalid X-AgentKit signature', 'INVALID_SIGNATURE')
+		throw verificationError(`Invalid ${AGENTKIT_HEADER} signature`, 'INVALID_SIGNATURE')
 	}
 
-	const lookup = dependencies.lookupNullifierHash ?? (signer => lookupNullifierHash(signer))
-	const nullifierHash = await lookup(address)
-	if (!nullifierHash) {
+	const lookup = dependencies.lookupId ?? (signer => lookupId(signer))
+	const cacheKey = address.toLowerCase()
+	const cached = lookupIdCache.get(cacheKey)
+	if (cached && cached.expiresAt > Date.now()) return cached.lookupId
+
+	const id = await lookup(address)
+	if (!id) {
 		throw verificationError('Agent is not registered in AgentBook', 'AGENT_NOT_REGISTERED', address)
 	}
 
-	return nullifierHash
+	lookupIdCache.set(cacheKey, { lookupId: id, expiresAt: Date.now() + LOOKUP_ID_CACHE_TTL_MS })
+	return id
 }
 
 export function verificationError(message: string, code: string, address?: string): Error {

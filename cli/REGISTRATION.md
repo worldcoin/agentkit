@@ -54,7 +54,7 @@ Run `agentkit register` again and complete the World App step within five minute
 
 Check the network connection and retry. The command checks registration before starting a new verification, so it is safe to rerun after an uncertain response.
 
-## Sign an x402 request body
+## Sign a request body
 
 After registration, pass the exact UTF-8 request body to `prove`:
 
@@ -62,4 +62,4 @@ After registration, pass the exact UTF-8 request body to `prove`:
 agentkit prove '<exact-request-body>'
 ```
 
-Use `agentkit prove ''` for a request with no body. The command does not create a missing key and will not sign for an unregistered identity. On success, send its hexadecimal `signature` result in the `X-AgentKit` header and retry with the exact same body.
+Use `agentkit prove ''` for a request with no body. The command does not create a missing key and will not sign for an unregistered identity. On success, send its hexadecimal `signature` result in the `AgentKit` header and retry with the exact same body.

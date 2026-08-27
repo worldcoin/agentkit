@@ -1,6 +1,6 @@
 # AgentKit x402 Extension
 
-Add proof-of-personhood access policies to x402 resources. A registered agent signs the request body, the server verifies the `X-AgentKit` signature through the canonical AgentBook on World Chain, and the access policy is applied per human.
+Add proof-of-personhood access policies to x402 resources. A registered agent signs the request body, the server verifies the `AgentKit` signature through the canonical AgentBook on World Chain, and the access policy is applied per lookup ID.
 
 ## Install
 
@@ -22,17 +22,17 @@ npx @worldcoin/agentkit-cli register
 | `free-trial` | The first N requests per human and endpoint bypass payment.                                       |
 | `discount`   | Registered agents may pay a configured percentage less, optionally for only the first N requests. |
 
-`free-trial` and `discount` require an `AgentKitStorage` implementation. Usage is keyed by the AgentBook nullifier, so multiple registered agents belonging to one human share the same allowance.
+`free-trial` and `discount` require an `AgentKitStorage` implementation. Usage is keyed by the AgentBook lookup ID, so multiple registered agents belonging to one person share the same allowance.
 
 ## Request flow
 
 1. The client calls the protected resource normally.
 2. The server returns `402 Payment Required` with `extensions.agentkit`.
-3. The client normalizes and signs the request body, then retries with the hexadecimal signature in `X-AgentKit`.
-4. The server calls Core's `verify(request)`, which recovers the signer and resolves its human nullifier from AgentBook on World Chain.
+3. The client normalizes and signs the request body, then retries with the hexadecimal signature in `AgentKit`.
+4. The server calls Core's `verify(request)`, which recovers the signer and resolves its lookup ID from AgentBook on World Chain.
 5. The hooks grant access, consume a trial use, or prepare a discounted payment according to the configured mode.
 
-The `agentkit` string is the lowercase x402 extension key. The HTTP request header is always `X-AgentKit`.
+The `agentkit` string is the lowercase x402 extension key. The HTTP request header is always `AgentKit`.
 
 ## Client
 
@@ -60,7 +60,7 @@ The built-in x402 adapters expose parsed JSON rather than raw request bytes. The
 
 ### Custom clients
 
-`createHeader(body)` returns the hexadecimal value to place in `X-AgentKit`:
+`createHeader(body)` returns the hexadecimal value to place in `AgentKit`:
 
 ```typescript
 const body = { query: 'weather', city: 'Lisbon' }
@@ -70,7 +70,7 @@ const response = await fetch(url, {
 	method: 'POST',
 	headers: {
 		'Content-Type': 'application/json',
-		'X-AgentKit': signature,
+		AgentKit: signature,
 	},
 	body: JSON.stringify(body),
 })
@@ -175,10 +175,10 @@ When the framework exposes the original Fetch `Request`, use Core directly for e
 import { verify } from '@worldcoin/agentkit-core'
 
 export async function POST(request: Request) {
-	const humanId = await verify(request)
+	const lookupId = await verify(request)
 	const body = await request.json()
 
-	return Response.json({ humanId, body })
+	return Response.json({ lookupId, body })
 }
 ```
 
@@ -211,7 +211,7 @@ Returns:
 | Field                | Description                                                                 |
 | -------------------- | --------------------------------------------------------------------------- |
 | `fetch`              | Fetch-compatible function that retries AgentKit-enabled 402 responses once. |
-| `createHeader(body)` | Signs `normalizeAgentkitBody(body)` and returns the `X-AgentKit` value.     |
+| `createHeader(body)` | Signs `normalizeAgentkitBody(body)` and returns the `AgentKit` value.       |
 
 ### `createAgentkitHooks(options)`
 
@@ -227,7 +227,7 @@ Returns `requestHook` and, only for discount mode, `verifyFailureHook`.
 
 ```typescript
 interface AgentKitStorage {
-	tryIncrementUsage(endpoint: string, humanId: string, limit: number): Promise
+	tryIncrementUsage(endpoint: string, lookupId: string, limit: number): Promise
 }
 ```
 
@@ -238,13 +238,13 @@ The check and increment must be atomic.
 - `normalizeAgentkitBody(body)` converts a parsed body to the UTF-8 text used for signing.
 - `normalizeAgentkitRequestBody(request)` reads and normalizes a client's Fetch request body.
 - `AGENTKIT` is the x402 extension key, `agentkit`.
-- `AGENTKIT_HEADER` is the request header name, `X-AgentKit`.
+- `AGENTKIT_HEADER` is the request header name, `AgentKit`.
 
 ## Security considerations
 
 - The signature authenticates only the normalized request body. It does not automatically bind the method, URL, host, audience, timestamp, or nonce. Put any required context in the signed body and validate it in the application.
 - Core currently uses recoverable EIP-191 EOA signatures. Smart-contract and counterfactual-wallet signatures are not supported by this format.
-- AgentBook is queried on World Chain for every verification, so registration state is not selected by the x402 payment network.
+- AgentBook is queried on World Chain when the lookup ID is not in the short-lived cache. The x402 payment network does not select the registration state.
 - JSON normalization is part of the x402 hooks contract. A custom client must sign and send the same normalized representation.
 - Trial and discount storage must be atomic and persistent in production.
 
@@ -252,7 +252,7 @@ The check and increment must be atomic.
 
 ### Signature verification fails
 
-- Confirm the header is `X-AgentKit`, not `agentkit`.
+- Confirm the header is `AgentKit`, not `agentkit`.
 - Confirm the header value is the raw hexadecimal signature, not base64 or JSON.
 - Confirm the retried body is the same normalized body that was signed.
 - For the hooks path, use an empty or JSON request body.
