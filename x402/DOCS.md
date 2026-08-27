@@ -1,6 +1,6 @@
 # AgentKit x402 Extension
 
-Add proof-of-personhood access policies to x402 resources. A registered agent signs its request with an RFC 9421 HTTP message signature, the server verifies the signature through the canonical AgentBook on World Chain, and the access policy is applied per human.
+Add proof-of-personhood access policies to x402 resources. A registered agent signs its request with an RFC 9421 HTTP message signature, the server verifies the signature through the canonical AgentBook on World Chain, and the access policy is applied per lookup ID.
 
 ## Install
 
@@ -22,14 +22,14 @@ npx @worldcoin/agentkit-cli register
 | `free-trial` | The first N requests per human and endpoint bypass payment.                                       |
 | `discount`   | Registered agents may pay a configured percentage less, optionally for only the first N requests. |
 
-`free-trial` and `discount` require an `AgentKitStorage` implementation. Usage is keyed by the AgentBook nullifier, so multiple registered agents belonging to one human share the same allowance.
+`free-trial` and `discount` require an `AgentKitStorage` implementation. Usage is keyed by the AgentBook lookup ID, so multiple registered agents belonging to one person share the same allowance.
 
 ## Request flow
 
 1. The client calls the protected resource normally.
 2. The server returns `402 Payment Required` with `extensions.agentkit`.
 3. The client signs the request under the AgentKit RFC 9421 profile — binding the method, host, path, query string, a digest of the normalized body, and a five-minute validity window — then retries with the `Signature-Input`, `Signature`, and `Content-Digest` headers.
-4. The server calls Core's `verify(request)`, which rebuilds the signature base from the request it actually received, recovers the signer, and resolves its human nullifier from AgentBook on World Chain.
+4. The server calls Core's `verify(request)`, which rebuilds the signature base from the request it actually received, recovers the signer, and resolves its lookup ID from AgentBook on World Chain.
 5. The hooks grant access, consume a trial use, or prepare a discounted payment according to the configured mode.
 
 The `agentkit` string is the lowercase x402 extension key. The request carries the standard RFC 9421 headers `Signature-Input` and `Signature` (labeled `agentkit`) plus `Content-Digest`.
@@ -176,10 +176,10 @@ When the framework exposes the original Fetch `Request`, use Core directly for e
 import { verify } from '@worldcoin/agentkit-core'
 
 export async function POST(request: Request) {
-	const humanId = await verify(request)
+	const lookupId = await verify(request)
 	const body = await request.json()
 
-	return Response.json({ humanId, body })
+	return Response.json({ lookupId, body })
 }
 ```
 
@@ -228,7 +228,7 @@ Returns `requestHook` and, only for discount mode, `verifyFailureHook`.
 
 ```typescript
 interface AgentKitStorage {
-	tryIncrementUsage(endpoint: string, humanId: string, limit: number): Promise<boolean>
+	tryIncrementUsage(endpoint: string, lookupId: string, limit: number): Promise<boolean>
 }
 ```
 
@@ -248,7 +248,7 @@ The check and increment must be atomic.
 - Core uses recoverable EIP-191 EOA signatures over the RFC 9421 signature base, and the recovered signer must match the `keyid` address. Smart-contract and counterfactual-wallet signatures are not yet supported.
 - Addresses surfaced by the SDK (`verifyRequest` results, hook events, the recovered discount payer) are EIP-55 checksummed; the wire-format `keyid` is lowercase. Always compare addresses case-insensitively.
 - The signature binds `@authority`, so the URL the server verifies against must reflect the public host. Behind a proxy, make sure the framework applies `X-Forwarded-Host` (or equivalent) before the hook reads the request URL.
-- AgentBook is queried on World Chain for every verification, so registration state is not selected by the x402 payment network.
+- AgentBook is queried on World Chain when the lookup ID is not in the short-lived cache, so registration state is not selected by the x402 payment network.
 - JSON normalization is part of the x402 hooks contract. A custom client must sign and send the same normalized representation.
 - Trial and discount storage must be atomic and persistent in production.
 

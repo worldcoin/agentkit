@@ -1,5 +1,5 @@
 import { getAddress, isAddressEqual, recoverMessageAddress, type Hex } from 'viem'
-import { lookupNullifierHash } from './agent-book'
+import { lookupId } from './agent-book'
 import {
 	CLOCK_SKEW_SECONDS,
 	CONTENT_DIGEST_HEADER,
@@ -13,8 +13,11 @@ import {
 	parseSignatureInput,
 } from './signature'
 
+const LOOKUP_ID_CACHE_TTL_MS = 60_000
+const lookupIdCache = new Map<string, { lookupId: string; expiresAt: number }>()
+
 export type VerifiedAgentRequest = {
-	nullifierHash: string
+	lookupId: string
 	address: string
 	created: number
 	expires: number
@@ -22,14 +25,14 @@ export type VerifiedAgentRequest = {
 
 type VerifyRequestDependencies = {
 	recoverAddress?: (signatureBase: string, signature: Hex) => Promise<string>
-	lookupNullifierHash?: (address: string) => Promise<string | null>
+	lookupId?: (address: string) => Promise<string | null>
 	/** Unix seconds; injectable for tests. */
 	now?: () => number
 }
 
 export async function verify(request: Request): Promise<string> {
-	const { nullifierHash } = await verifyRequest(request)
-	return nullifierHash
+	const verified = await verifyRequest(request)
+	return verified.lookupId
 }
 
 export async function verifyRequest(
@@ -90,14 +93,23 @@ export async function verifyRequest(
 	// The wire format carries a lowercase keyid; surface the EIP-55 checksummed form.
 	const address = getAddress(params.keyid)
 
-	const lookup = dependencies.lookupNullifierHash ?? (signer => lookupNullifierHash(signer))
-	const nullifierHash = await lookup(address)
-	if (!nullifierHash) {
-		throw verificationError('Agent is not registered in AgentBook', 'AGENT_NOT_REGISTERED', address)
+	const lookup = dependencies.lookupId ?? (signer => lookupId(signer))
+	const cacheKey = address.toLowerCase()
+	const cached = lookupIdCache.get(cacheKey)
+	let id: string
+	if (cached && cached.expiresAt > Date.now()) {
+		id = cached.lookupId
+	} else {
+		const resolved = await lookup(address)
+		if (!resolved) {
+			throw verificationError('Agent is not registered in AgentBook', 'AGENT_NOT_REGISTERED', address)
+		}
+		lookupIdCache.set(cacheKey, { lookupId: resolved, expiresAt: Date.now() + LOOKUP_ID_CACHE_TTL_MS })
+		id = resolved
 	}
 
 	return {
-		nullifierHash,
+		lookupId: id,
 		address,
 		created: params.created,
 		expires: params.expires,

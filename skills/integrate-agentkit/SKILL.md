@@ -1,6 +1,6 @@
 ---
 name: integrate-agentkit
-description: Protect one HTTP endpoint with @worldcoin/agentkit-core. Use this skill when an application must validate AgentKit RFC 9421 request signatures, identify a registered human, or add AgentKit authentication to an API route.
+description: Protect one HTTP endpoint with @worldcoin/agentkit-core. Use this skill when an application must validate AgentKit RFC 9421 request signatures, identify a registered agent, or add AgentKit authentication to an API route.
 ---
 
 # Integrate AgentKit
@@ -37,22 +37,22 @@ const agentkitError = {
 }
 
 export async function POST(request: Request) {
-	let humanId: string
+	let lookupId: string
 
 	try {
-		humanId = await verify(request)
+		lookupId = await verify(request)
 	} catch {
 		return Response.json(agentkitError, { status: 401 })
 	}
 
 	const body = await request.json()
-	return createReport(body, { humanId })
+	return createReport(body, { lookupId })
 }
 ```
 
 Replace `createReport` with the current endpoint logic.
 
-Use the returned nullifier hash as an internal human ID when the access policy needs it. Do not return the nullifier unless the API contract requires it. Do not expose the signer address or private key.
+Use the returned lookup ID as an internal identifier when the access policy needs it. Do not return the lookup ID unless the API contract requires it. Do not expose the signer address or private key.
 
 `verify` clones the request. The endpoint can read the body after successful verification.
 

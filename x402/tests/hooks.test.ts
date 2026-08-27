@@ -12,7 +12,7 @@ const SIGNATURE = `agentkit=:${'A'.repeat(87)}=:`
 const CONTENT_DIGEST = 'sha-256=:47DEQpj8HBSa+/TImW+5JCeuQeRkm5NMpJWZG3hSuFU=:'
 
 const VERIFIED: VerifiedAgentRequest = {
-	nullifierHash: 'human-1',
+	lookupId: 'human-1',
 	address: ADDRESS,
 	created: 1755600000,
 	expires: 1755600300,
@@ -147,12 +147,12 @@ describe('createAgentkitHooks', () => {
 		await expect(hooks.requestHook({ adapter, path: '/protected' })).resolves.toBeUndefined()
 	})
 
-	it('uses the nullifier hash to grant free-trial access', async () => {
-		const usageCalls: Array<{ endpoint: string; humanId: string; limit: number }> = []
+	it('uses the lookup ID to grant free-trial access', async () => {
+		const usageCalls: Array<{ endpoint: string; lookupId: string; limit: number }> = []
 		const events: Array<Record<string, string>> = []
 		const storage: AgentKitStorage = {
-			async tryIncrementUsage(endpoint, humanId, limit) {
-				usageCalls.push({ endpoint, humanId, limit })
+			async tryIncrementUsage(endpoint, lookupId, limit) {
+				usageCalls.push({ endpoint, lookupId, limit })
 				return true
 			},
 		}
@@ -169,23 +169,23 @@ describe('createAgentkitHooks', () => {
 		const result = await hooks.requestHook({ adapter: createAdapter(), path: '/protected' })
 
 		expect(result).toEqual({ grantAccess: true })
-		expect(usageCalls).toEqual([{ endpoint: '/protected', humanId: 'human-1', limit: 3 }])
+		expect(usageCalls).toEqual([{ endpoint: '/protected', lookupId: 'human-1', limit: 3 }])
 		expect(events).toEqual([
 			{
 				type: 'agent_verified',
 				resource: '/protected',
 				address: ADDRESS,
-				humanId: 'human-1',
+				lookupId: 'human-1',
 			},
 		])
 	})
 
-	it('uses the nullifier hash to recover discounted underpayments', async () => {
-		const usageCalls: Array<{ endpoint: string; humanId: string; limit: number }> = []
+	it('uses the lookup ID to recover discounted underpayments', async () => {
+		const usageCalls: Array<{ endpoint: string; lookupId: string; limit: number }> = []
 		const events: Array<Record<string, string>> = []
 		const storage: AgentKitStorage = {
-			async tryIncrementUsage(endpoint, humanId, limit) {
-				usageCalls.push({ endpoint, humanId, limit })
+			async tryIncrementUsage(endpoint, lookupId, limit) {
+				usageCalls.push({ endpoint, lookupId, limit })
 				return true
 			},
 		}
@@ -213,13 +213,13 @@ describe('createAgentkitHooks', () => {
 		expect(requestResult).toBeUndefined()
 		expect(verifyResult).toEqual({ recovered: true, result: { isValid: true, payer: ADDRESS } })
 		expect(requirements.amount).toBe('50')
-		expect(usageCalls).toEqual([{ endpoint: '/protected', humanId: 'human-1', limit: 2 }])
+		expect(usageCalls).toEqual([{ endpoint: '/protected', lookupId: 'human-1', limit: 2 }])
 		expect(events).toEqual([
 			{
 				type: 'discount_applied',
 				resource: '/protected',
 				address: ADDRESS,
-				humanId: 'human-1',
+				lookupId: 'human-1',
 			},
 		])
 	})

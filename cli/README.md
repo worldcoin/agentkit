@@ -22,7 +22,7 @@ When `XDG_CONFIG_HOME` is not set to an absolute path, the CLI uses:
 ~/.config/agentkit/key
 ```
 
-Keep this file private and back it up. It is the durable identity for this agent. The private key never leaves the machine; registration sends the derived public address and World ID proof to the hosted relay.
+Keep this file private. Store any backup in a secure location. It is the durable identity for this agent. The CLI does not send the private key over the network. Registration sends the derived public address and World ID proof to the hosted relay.
 
 Full registration guide: [REGISTRATION.md](./REGISTRATION.md)
 

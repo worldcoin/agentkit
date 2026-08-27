@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 import './polyfill.js'
 import { Cli, z } from 'incur'
+import { homedir } from 'node:os'
 import type { Hex } from 'viem'
 import qrcode from 'qrcode-terminal'
 import { worldchain } from 'viem/chains'
@@ -9,7 +10,7 @@ import { createWorldBridgeStore } from '@worldcoin/idkit-core'
 import { solidityEncode } from '@worldcoin/idkit-core/hashing'
 import { createPublicClient, http, decodeAbiParameters } from 'viem'
 import { bodyInputSchema, createProofHeaders, methodInputSchema, urlInputSchema } from './prove.js'
-import { loadAgentSigner, loadOrCreateAgentIdentity } from './key.js'
+import { AgentKeyNotFoundError, getAgentkitKeyPath, loadAgentSigner, loadOrCreateAgentIdentity } from './key.js'
 
 // ─── Config ──────────────────────────────────────────────────────────────────
 
@@ -26,7 +27,7 @@ const AGENT_BOOK_ABI = [
 	{
 		inputs: [{ internalType: 'address', name: '', type: 'address' }],
 		name: 'lookupHuman',
-		outputs: [{ internalType: 'uint256', name: 'humanId', type: 'uint256' }],
+		outputs: [{ internalType: 'uint256', name: 'lookupId', type: 'uint256' }],
 		stateMutability: 'view',
 		type: 'function',
 	},
@@ -36,27 +37,28 @@ const APP_ID = 'app_a7c3e2b6b83927251a0db5345bd7146a'
 const ACTION = 'agentbook-registration'
 const REGISTRATION_RELAY_URL = 'https://x402-worldchain.vercel.app/register'
 const AGENT_BOOK_NETWORK = 'eip155:480'
+const AGENTKIT_KEY_PATH = getAgentkitKeyPath(process.env.XDG_CONFIG_HOME, homedir())
 
 // ─── CLI ─────────────────────────────────────────────────────────────────────
 
 const cli = Cli.create('agentkit', {
-	description: 'Register an agent with a World ID-verified human via AgentBook.',
+	description: 'Register an agent in AgentBook with World ID.',
 	version: '0.1.0',
 })
 
 cli.command('status', {
-	description: 'Check whether an agent wallet is registered in AgentBook.',
+	description: 'Check whether an agent is registered in AgentBook.',
 	args: z.object({
 		address: z
 			.string()
-			.regex(/^0x[a-fA-F0-9]{40}$/, 'Invalid Ethereum address')
-			.describe('Agent wallet address'),
+			.regex(/^0x[a-fA-F0-9]{40}$/, 'Invalid public key representation')
+			.describe('Agent public key representation'),
 	}),
 	outputPolicy: 'agent-only',
 	output: z.object({
 		agent: z.string(),
 		registered: z.boolean(),
-		humanId: z.string().nullable(),
+		lookupId: z.string().nullable(),
 		contract: z.string(),
 		network: z.string(),
 	}),
@@ -72,9 +74,9 @@ cli.command('status', {
 
 		if (!c.agent) console.log(`  Looking up AgentBook status for ${agentAddress}...`)
 
-		let humanIdRaw: bigint
+		let lookupIdRaw: bigint
 		try {
-			humanIdRaw = await client.readContract({
+			lookupIdRaw = await client.readContract({
 				address: AGENT_BOOK_CONTRACT,
 				abi: AGENT_BOOK_ABI,
 				functionName: 'lookupHuman',
@@ -88,11 +90,11 @@ cli.command('status', {
 			})
 		}
 
-		const humanId = humanIdRaw === 0n ? null : bigintToHex(humanIdRaw)
+		const lookupId = lookupIdRaw === 0n ? null : bigintToHex(lookupIdRaw)
 		const result = {
 			agent: agentAddress,
-			registered: humanId !== null,
-			humanId,
+			registered: lookupId !== null,
+			lookupId,
 			contract: AGENT_BOOK_CONTRACT,
 			network: AGENT_BOOK_NETWORK,
 		}
@@ -102,7 +104,7 @@ cli.command('status', {
 			console.log()
 			console.log(`  Agent:   \x1b[36m${result.agent}\x1b[0m`)
 			console.log(`  Status:  ${status}`)
-			if (result.humanId) console.log(`  Human:   \x1b[90m${result.humanId}\x1b[0m`)
+			if (result.lookupId) console.log(`  Lookup ID: \x1b[90m${result.lookupId}\x1b[0m`)
 			console.log(`  Network: World Chain (${result.network})`)
 			console.log(`  Contract: \x1b[90m${result.contract}\x1b[0m`)
 			console.log()
@@ -124,7 +126,7 @@ cli.command('register', {
 
 		let agentAddress: `0x${string}`
 		try {
-			const identity = await loadOrCreateAgentIdentity()
+			const identity = await loadOrCreateAgentIdentity(AGENTKIT_KEY_PATH)
 			agentAddress = identity.address
 			if (!c.agent && identity.created) console.log('  \x1b[32m✓ Local identity created\x1b[0m')
 		} catch (err) {
@@ -138,9 +140,9 @@ cli.command('register', {
 
 		if (!c.agent) console.log('  Checking registration status...')
 
-		let existingHumanId: bigint
+		let existingLookupId: bigint
 		try {
-			existingHumanId = await client.readContract({
+			existingLookupId = await client.readContract({
 				address: AGENT_BOOK_CONTRACT,
 				abi: AGENT_BOOK_ABI,
 				functionName: 'lookupHuman',
@@ -154,7 +156,7 @@ cli.command('register', {
 			})
 		}
 
-		if (existingHumanId !== 0n) {
+		if (existingLookupId !== 0n) {
 			if (!c.agent) {
 				console.log()
 				console.log('  \x1b[32m\x1b[1m✓ This agent is already registered\x1b[0m')
@@ -271,13 +273,12 @@ cli.command('prove', {
 	async run(c) {
 		let signer
 		try {
-			signer = await loadAgentSigner()
+			signer = await loadAgentSigner(AGENTKIT_KEY_PATH)
 		} catch (err) {
-			const keyMissing = hasErrorCode(err, 'ENOENT')
 			return c.error({
-				code: keyMissing ? 'KEY_NOT_FOUND' : 'IDENTITY_LOAD_FAILED',
-				message: keyMissing
-					? 'No AgentKit key is available. Run `agentkit register` first.'
+				code: err instanceof AgentKeyNotFoundError ? 'KEY_NOT_FOUND' : 'IDENTITY_LOAD_FAILED',
+				message: err instanceof AgentKeyNotFoundError
+					? err.message
 					: err instanceof Error
 						? err.message
 						: 'Unable to load the local agent identity',
@@ -285,9 +286,9 @@ cli.command('prove', {
 		}
 
 		const client = createPublicClient({ chain: worldchain, transport: http() })
-		let humanId: bigint
+		let lookupId: bigint
 		try {
-			humanId = await client.readContract({
+			lookupId = await client.readContract({
 				address: AGENT_BOOK_CONTRACT,
 				abi: AGENT_BOOK_ABI,
 				functionName: 'lookupHuman',
@@ -301,7 +302,7 @@ cli.command('prove', {
 			})
 		}
 
-		if (humanId === 0n) {
+		if (lookupId === 0n) {
 			return c.error({
 				code: 'AGENT_NOT_REGISTERED',
 				message: 'This agent is not registered. Run `agentkit register` first.',
@@ -336,10 +337,6 @@ type VerifyCompletion = { success: true; proof: ISuccessResult } | { success: fa
 
 function bigintToHex(value: bigint): string {
 	return `0x${value.toString(16)}`
-}
-
-function hasErrorCode(error: unknown, code: string): boolean {
-	return error instanceof Error && 'code' in error && error.code === code
 }
 
 async function waitForCompletion(

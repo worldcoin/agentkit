@@ -10,11 +10,11 @@ import {
 } from './protocol'
 
 export type AgentkitHookEvent =
-	| { type: 'agent_verified'; resource: string; address: string; humanId: string }
+	| { type: 'agent_verified'; resource: string; address: string; lookupId: string }
 	| { type: 'agent_not_verified'; resource: string; address: string }
 	| { type: 'validation_failed'; resource: string; error?: string }
-	| { type: 'discount_applied'; resource: string; address: string; humanId: string }
-	| { type: 'discount_exhausted'; resource: string; address: string; humanId: string }
+	| { type: 'discount_applied'; resource: string; address: string; lookupId: string }
+	| { type: 'discount_exhausted'; resource: string; address: string; lookupId: string }
 
 export interface CreateAgentkitHooksOptions {
 	mode?: AgentkitMode
@@ -56,7 +56,7 @@ export function createAgentkitHooksInternal(
 	// Shared state for discount mode: requestHook stores verified agent info
 	// for verifyFailureHook to use (it doesn't have HTTP header access).
 	const PENDING_TTL_MS = 5 * 60 * 1000
-	const pendingDiscounts = new Map<string, { humanId: string; address: string; createdAt: number }>()
+	const pendingDiscounts = new Map<string, { lookupId: string; address: string; createdAt: number }>()
 
 	const requestHook = async (context: {
 		adapter: {
@@ -102,21 +102,21 @@ export function createAgentkitHooksInternal(
 				// GET/HEAD requests cannot carry a body; core digests the empty byte string.
 				...(isBodyless ? {} : { body }),
 			})
-			const { nullifierHash: humanId, address } = await verify(verificationRequest)
+			const { lookupId, address } = await verify(verificationRequest)
 
 			if (mode.type === 'free') {
-				onEvent?.({ type: 'agent_verified', resource: context.path, address, humanId })
+				onEvent?.({ type: 'agent_verified', resource: context.path, address, lookupId })
 				return { grantAccess: true }
 			}
 
 			if (mode.type === 'free-trial') {
 				const uses = mode.uses ?? 1
-				if (await storage!.tryIncrementUsage(context.path, humanId, uses)) {
+				if (await storage!.tryIncrementUsage(context.path, lookupId, uses)) {
 					onEvent?.({
 						type: 'agent_verified',
 						resource: context.path,
 						address,
-						humanId,
+						lookupId,
 					})
 					return { grantAccess: true }
 				}
@@ -131,7 +131,7 @@ export function createAgentkitHooksInternal(
 					if (now - entry.createdAt > PENDING_TTL_MS) pendingDiscounts.delete(key)
 				}
 				pendingDiscounts.set(`${context.path}:${address.toLowerCase()}`, {
-					humanId,
+					lookupId,
 					address,
 					createdAt: now,
 				})
@@ -170,7 +170,7 @@ export function createAgentkitHooksInternal(
 					if (!pending) return
 					if (!isUnderpaymentError(context.error)) return
 
-					const { humanId, address } = pending
+					const { lookupId, address } = pending
 
 					const requiredAmount = BigInt(context.requirements.amount)
 					const discountedAmount = (requiredAmount * BigInt(100 - mode.percent)) / 100n
@@ -181,11 +181,11 @@ export function createAgentkitHooksInternal(
 					if (paidAmount >= requiredAmount) return
 
 					const uses = mode.uses ?? Infinity
-					if (!(await storage!.tryIncrementUsage(resourcePath, humanId, uses))) {
-						onEvent?.({ type: 'discount_exhausted', resource: resourcePath, address, humanId })
+					if (!(await storage!.tryIncrementUsage(resourcePath, lookupId, uses))) {
+						onEvent?.({ type: 'discount_exhausted', resource: resourcePath, address, lookupId })
 						return
 					}
-					onEvent?.({ type: 'discount_applied', resource: resourcePath, address, humanId })
+					onEvent?.({ type: 'discount_applied', resource: resourcePath, address, lookupId })
 
 					// Adjust requirements so settlement verifies against the discounted amount
 					context.requirements.amount = String(paidAmount)

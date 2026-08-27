@@ -29,9 +29,9 @@ describe('createProofHeaders', () => {
 		})
 
 		const request = new Request('https://api.example.com/data?x=1', { method: 'POST', headers, body })
-		const result = await verifyRequest(request, { lookupNullifierHash: registeredLookup(signer) })
+		const result = await verifyRequest(request, { lookupId: registeredLookup(signer) })
 
-		expect(result.nullifierHash).toBe('0x1234')
+		expect(result.lookupId).toBe('0x1234')
 		expect(result.address).toBe(signer.address)
 	})
 
@@ -47,9 +47,9 @@ describe('createProofHeaders', () => {
 		expect(headers['Content-Digest']).toBe('sha-256=:47DEQpj8HBSa+/TImW+5JCeuQeRkm5NMpJWZG3hSuFU=:')
 
 		const request = new Request('https://api.example.com/data', { method: 'GET', headers })
-		const result = await verifyRequest(request, { lookupNullifierHash: registeredLookup(signer) })
+		const result = await verifyRequest(request, { lookupId: registeredLookup(signer) })
 
-		expect(result.nullifierHash).toBe('0x1234')
+		expect(result.lookupId).toBe('0x1234')
 	})
 
 	it('rejects headers replayed against a different URL', async () => {
@@ -63,7 +63,7 @@ describe('createProofHeaders', () => {
 		})
 
 		const request = new Request('https://api.example.com/other', { method: 'POST', headers, body })
-		await expect(verifyRequest(request, { lookupNullifierHash: registeredLookup(signer) })).rejects.toThrow(
+		await expect(verifyRequest(request, { lookupId: registeredLookup(signer) })).rejects.toThrow(
 			'Signature does not match the keyid address'
 		)
 	})

@@ -30,7 +30,7 @@
 		"build": "tsup"
 	},
 	"dependencies": {
-		"viem": "^2.46.2"
+		"viem": "^2.55.19"
 	},
 	"devDependencies": {
 		"tsup": "^8.5.1",

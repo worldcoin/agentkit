@@ -61,12 +61,12 @@ describe('AgentKit client/server E2E', () => {
 		const clientEvents: Array<Record<string, unknown>> = []
 		const serverEvents: Array<Record<string, string>> = []
 		const lookups: string[] = []
-		const usageCalls: Array<{ endpoint: string; humanId: string; limit: number }> = []
+		const usageCalls: Array<{ endpoint: string; lookupId: string; limit: number }> = []
 		let requestCount = 0
 
 		const storage: AgentKitStorage = {
-			async tryIncrementUsage(endpoint, humanId, limit) {
-				usageCalls.push({ endpoint, humanId, limit })
+			async tryIncrementUsage(endpoint, lookupId, limit) {
+				usageCalls.push({ endpoint, lookupId, limit })
 				return true
 			},
 		}
@@ -79,7 +79,7 @@ describe('AgentKit client/server E2E', () => {
 			{
 				verify: request =>
 					verifyRequest(request, {
-						async lookupNullifierHash(address) {
+						async lookupId(address) {
 							lookups.push(address)
 							return address === account.address ? 'human-1' : null
 						},
@@ -116,7 +116,7 @@ describe('AgentKit client/server E2E', () => {
 		expect(body).toEqual({ ok: true })
 		expect(requestCount).toBe(2)
 		expect(lookups).toEqual([account.address])
-		expect(usageCalls).toEqual([{ endpoint: '/protected', humanId: 'human-1', limit: 3 }])
+		expect(usageCalls).toEqual([{ endpoint: '/protected', lookupId: 'human-1', limit: 3 }])
 		expect(clientEvents.map(event => event.type)).toEqual([
 			'agentkit_detected',
 			'agentkit_signed',
@@ -127,7 +127,7 @@ describe('AgentKit client/server E2E', () => {
 				type: 'agent_verified',
 				resource: '/protected',
 				address: account.address,
-				humanId: 'human-1',
+				lookupId: 'human-1',
 			},
 		])
 	})
@@ -137,7 +137,7 @@ describe('AgentKit client/server E2E', () => {
 		const events: Array<Record<string, string>> = []
 		const hooks = createAgentkitHooksInternal(
 			{ onEvent: event => events.push(event as Record<string, string>) },
-			{ verify: request => verifyRequest(request, { lookupNullifierHash: async () => 'human-1' }) }
+			{ verify: request => verifyRequest(request, { lookupId: async () => 'human-1' }) }
 		)
 
 		const headers = await createSignatureHeaders({

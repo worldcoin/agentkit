@@ -47,24 +47,24 @@ async function signedRequest(options: SignedRequestOptions = {}) {
 function registered(account: { address: string }) {
 	return {
 		now: () => NOW + 1,
-		lookupNullifierHash: async (address: string) => (address === account.address ? '0x1234' : null),
+		lookupId: async (address: string) => (address === account.address ? '0x1234' : null),
 	}
 }
 
 describe('verifyRequest', () => {
-	it('verifies a signed POST and returns the nullifier hash, address, and params', async () => {
+	it('verifies a signed POST and returns the lookup ID, address, and params', async () => {
 		const { account, request } = await signedRequest()
 		const lookups: string[] = []
 
 		const result = await verifyRequest(request, {
 			now: () => NOW + 1,
-			lookupNullifierHash: async address => {
+			lookupId: async address => {
 				lookups.push(address)
 				return address === account.address ? '0x1234' : null
 			},
 		})
 
-		expect(result.nullifierHash).toBe('0x1234')
+		expect(result.lookupId).toBe('0x1234')
 		// viem accounts expose EIP-55 checksummed addresses; verifyRequest surfaces the same form.
 		expect(result.address).toBe(account.address)
 		expect(result.created).toBe(NOW)
@@ -76,7 +76,7 @@ describe('verifyRequest', () => {
 	it('verifies a bodyless GET request', async () => {
 		const { account, request } = await signedRequest({ method: 'GET', url: 'https://api.example.com/data', body: '' })
 		const result = await verifyRequest(request, registered(account))
-		expect(result.nullifierHash).toBe('0x1234')
+		expect(result.lookupId).toBe('0x1234')
 	})
 
 	it('rejects a request missing any signature header', async () => {
@@ -151,7 +151,7 @@ describe('verifyRequest', () => {
 
 		const skewed = await signedRequest({ now: NOW + 30 })
 		const result = await verifyRequest(skewed.request, { ...registered(skewed.account), now: () => NOW })
-		expect(result.nullifierHash).toBe('0x1234')
+		expect(result.lookupId).toBe('0x1234')
 	})
 
 	it('rejects a valid signature whose keyid names a different address', async () => {
@@ -164,9 +164,9 @@ describe('verifyRequest', () => {
 
 	it('throws when the recovered signer is not registered', async () => {
 		const { request } = await signedRequest()
-		await expect(
-			verifyRequest(request, { now: () => NOW + 1, lookupNullifierHash: async () => null })
-		).rejects.toThrow('Agent is not registered in AgentBook')
+		await expect(verifyRequest(request, { now: () => NOW + 1, lookupId: async () => null })).rejects.toThrow(
+			'Agent is not registered in AgentBook'
+		)
 	})
 
 	it('propagates AgentBook RPC failures', async () => {
@@ -174,10 +174,28 @@ describe('verifyRequest', () => {
 		await expect(
 			verifyRequest(request, {
 				now: () => NOW + 1,
-				lookupNullifierHash: async () => {
+				lookupId: async () => {
 					throw new Error('World Chain unavailable')
 				},
 			})
 		).rejects.toThrow('World Chain unavailable')
+	})
+
+	it('caches a successful lookup ID', async () => {
+		const { request } = await signedRequest()
+		let lookupCount = 0
+		const dependencies = {
+			now: () => NOW + 1,
+			lookupId: async () => {
+				lookupCount += 1
+				return '0x1234'
+			},
+		}
+
+		const first = await verifyRequest(request, dependencies)
+		const second = await verifyRequest(request, dependencies)
+		expect(first.lookupId).toBe('0x1234')
+		expect(second.lookupId).toBe('0x1234')
+		expect(lookupCount).toBe(1)
 	})
 })
