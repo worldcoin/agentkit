@@ -5,6 +5,7 @@ import type { AgentSigner } from './key.js'
 export const methodInputSchema = z
 	.string()
 	.regex(/^[A-Za-z]+$/, 'Invalid HTTP method')
+	.toUpperCase()
 	.describe('HTTP method of the request, e.g. GET or POST')
 
 export const urlInputSchema = z

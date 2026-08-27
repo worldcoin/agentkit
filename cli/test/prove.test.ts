@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'bun:test'
 import { verifyRequest } from '@worldcoin/agentkit-core'
 import { privateKeyToAccount } from 'viem/accounts'
-import { createProofHeaders } from '../src/prove.js'
+import { createProofHeaders, methodInputSchema } from '../src/prove.js'
 import type { AgentSigner } from '../src/key.js'
 
 function createSigner(privateKey: `0x${string}`): AgentSigner & { account: ReturnType<typeof privateKeyToAccount> } {
@@ -16,6 +16,18 @@ function createSigner(privateKey: `0x${string}`): AgentSigner & { account: Retur
 function registeredLookup(signer: { address: string }) {
 	return async (address: string) => (address === signer.address ? '0x1234' : null)
 }
+
+describe('methodInputSchema', () => {
+	it('normalizes the method to uppercase', () => {
+		expect(methodInputSchema.parse('post')).toBe('POST')
+		expect(methodInputSchema.parse('GET')).toBe('GET')
+	})
+
+	it('rejects non-token methods', () => {
+		expect(() => methodInputSchema.parse('P0ST')).toThrow()
+		expect(() => methodInputSchema.parse('GET /')).toThrow()
+	})
+})
 
 describe('createProofHeaders', () => {
 	it('produces headers that pass core verification for the same request', async () => {
