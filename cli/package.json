@@ -26,6 +26,7 @@
   },
   "dependencies": {
     "@worldcoin/idkit-core": "2.1.0",
+    "ajv": "^8.18.0",
     "incur": "^0.2.2",
     "qrcode-terminal": "^0.12.0",
     "viem": "^2.55.19"
