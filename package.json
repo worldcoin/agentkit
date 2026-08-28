@@ -12,6 +12,8 @@
 		"build:x402": "bun run --cwd x402 build",
 		"build:cli": "bun run --cwd cli build",
 		"build": "bun run build:core && bun run build:x402 && bun run build:cli",
+		"test": "bun test ./core/tests ./x402/tests",
+		"check": "bun run build && bun run test",
 		"changeset": "changeset",
 		"release": "bun run build && changeset publish"
 	},
