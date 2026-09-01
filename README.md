@@ -2,90 +2,58 @@
 
 # **AgentKit**
 
-**Verify that an agent is backed by a real, [World ID-verified human](https://docs.world.org/agents/agent-kit).**
+**Let an agent show that a person with a verified [World ID](https://docs.world.org/agents/agent-kit) controls it.**
 
-<img src="registration.gif" alt="AgentKit Registration" width="960" />
+<img src="registration.gif" alt="AgentKit registration" width="960" />
 
 </div>
 
-## Skills
-For your Agent to use your registration when accessing x402 endpoints
+AgentKit lets an agent show that a verified person controls it. A service can use this proof to control access. AgentKit does not give the identity of the person to the service.
+
+## Register an agent
+
+Run this command:
+
 ```bash
-npx skills add worldcoin/agentkit agentkit-x402 
+npx @worldcoin/agentkit-cli register
 ```
 
-For developers building x402 servers, add the integration guide to your knowledge base:
+The CLI creates an identity for the agent. It then asks you to complete a World ID check in World App. You register the identity only one time.
+
+For more information, read the [registration guide](./cli/REGISTRATION.md).
+
+## Add AgentKit to a service
+
+Install the Core package:
+
+```bash
+npm install @worldcoin/agentkit-core
+```
+
+Add the integration skill to help an agent protect one endpoint:
+
 ```bash
 npx skills add worldcoin/agentkit integrate-agentkit
 ```
 
-## How it Works
+## Optional x402 support
 
-1. An agent wallet is registered in AgentBook using a World ID proof.
-2. A website or API using x402 challenges the agent to sign a CAIP-122 message.
-3. The server verifies the signature, resolves the registering human from AgentBook, and applies the configured access policy.
-
-This lets applications distinguish between arbitrary automation and automation acting on behalf of a real human, without exposing the human's underlying identity.
-
-## For Agents
-
-### Register
-
-Register your wallet in AgentBook so servers can verify you are human-backed. Registration is gasless by default (uses a hosted relay on Base mainnet).
-
-```bash
-npx @worldcoin/agentkit-cli register <your-wallet-address>
-```
-
-This will prompt a World ID verification via World App. You only need to register once per wallet.
-
-Check whether a wallet is already registered:
-
-```bash
-npx @worldcoin/agentkit-cli status <your-wallet-address>
-```
-
-For the full registration guide (manual mode, custom relays, Base Sepolia): [`./cli/REGISTRATION.md`](./cli/REGISTRATION.md)
-
-### Use
-
-Once registered, create an AgentKit client and use `agentkit.fetch` for x402 HTTP calls. It tries AgentKit verification before payment and only leaves the normal x402 payment flow in place when verification is unavailable, fails, or is exhausted.
+AgentKit also supports services that use x402. Install the server package:
 
 ```bash
 npm install @worldcoin/agentkit
 ```
 
-```typescript
-import { createAgentkitClient } from '@worldcoin/agentkit'
-
-const agentkit = createAgentkitClient({
-	signer: {
-		address: agentWallet.address,
-		chainId: 'eip155:8453',
-		type: 'eip191',
-		signMessage: message => agentWallet.signMessage(message),
-	},
-})
-
-const response = await agentkit.fetch('https://api.example.com/data')
-```
-
-If your agent cannot change its HTTP client code, install the agent skill as fallback guidance:
+Add the client skill:
 
 ```bash
 npx skills add worldcoin/agentkit agentkit-x402
 ```
 
-The full flow — parsing 402 responses, signing the CAIP-122 challenge, and sending the `agentkit` header — is documented in the agent skill: [`./skills/agentkit-x402/SKILL.md`](./skills/agentkit-x402/SKILL.md)
-
-## For x402 Developers
-
-### Integrate
-
-Add AgentKit to your x402 server to offer human-backed agents free access, free trials, or discounts.
+Add the server integration skill:
 
 ```bash
-npm install @worldcoin/agentkit
+npx skills add worldcoin/agentkit integrate-agentkit-x402
 ```
 
-For the full integration guide (client wrapper, hooks setup, access modes, World Chain payments, AgentBook configuration): [`./x402/DOCS.md`](./x402/DOCS.md)
+Read the [x402 integration guide](./x402/DOCS.md) for more information.

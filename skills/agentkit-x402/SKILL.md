@@ -1,235 +1,126 @@
 ---
 name: agentkit-x402
-description: Use this skill when you receive a 402 Payment Required response that contains an `agentkit` extension. Covers checking 402 responses for the AgentKit extension before paying, constructing and signing a CAIP-122 challenge (SIWE for EVM), sending the signed `agentkit` HTTP header, and interpreting access modes (free, free-trial, discount). Supports both EOA wallets (EIP-191) and Smart Contract Wallets (ERC-1271, e.g. Coinbase Smart Wallet, Safe).
+description: Use when an HTTP 402 Payment Required response contains an `agentkit` extension. Sign the request with the AgentKit CLI, retry with the returned `Signature-Input`, `Signature`, and `Content-Digest` headers, interpret free, free-trial, and discount modes, and fall back to x402 payment only when AgentKit access is unavailable.
 ---
 
-# Using AgentKit as an Agent
+# Authenticate to x402 with AgentKit
 
-This skill is for AI agents that interact with websites and APIs protected by x402 + AgentKit. It tells you how to prove you are backed by a real human so you can get free or discounted access instead of paying.
+## Always try AgentKit before paying
 
-## Critical Rule: Always Check for AgentKit Before Paying
+When an HTTP request returns `402 Payment Required`, inspect the response's `extensions` object. Attempt AgentKit authentication whenever `extensions.agentkit` is present.
 
-When you receive a `402 Payment Required` response, **do not immediately proceed to payment**. First inspect the response for an `agentkit` extension. If one is present, attempt the AgentKit authentication flow below. Only fall back to payment if:
+Fall back to the normal x402 payment flow only when:
 
-- There is no `agentkit` extension in the 402 response
-- Your AgentKit authentication attempt fails and the server requires payment
-- You have exhausted your free-trial uses
+- the response has no `agentkit` extension;
+- `agentkit prove` cannot authenticate this agent;
+- the service rejects the signature; or
+- free-trial or discount access is exhausted.
 
-## Preferred Runtime Helper
+The lowercase `agentkit` name is only the x402 extension key. Never send it as a header. Authentication uses the standard HTTP Message Signatures headers defined by RFC 9421 — `Signature-Input` and `Signature` — plus `Content-Digest` (RFC 9530).
 
-If you can change the agent's HTTP client, use `createAgentkitClient` from `@worldcoin/agentkit` and route x402 API calls through `agentkit.fetch`. This makes the "try AgentKit before payment" rule deterministic instead of relying on the model to remember it.
+Do not read or request a private key. Do not construct signatures manually. The AgentKit CLI loads the managed identity, confirms that it is registered, and signs the request.
 
-```typescript
-import { createAgentkitClient } from '@worldcoin/agentkit'
+## Authenticate the request
 
-const agentkit = createAgentkitClient({
-  signer: {
-    address: wallet.address,
-    chainId: 'eip155:8453',
-    type: 'eip191',
-    signMessage: message => wallet.signMessage(message),
-  },
-})
+### 1. Prepare the body that will be retried
 
-const response = await agentkit.fetch('https://api.example.com/data')
+The signature covers the request method, URL, and body, so the body passed to `agentkit prove` and the body sent on the retry must be identical UTF-8 text.
+
+- For a request with no body, omit the body argument.
+- For JSON, parse it and serialize it once as compact JSON. Use that exact compact JSON for both signing and the retry. Do not pretty-print or reorder it afterward.
+- The portable x402 hooks flow supports bodyless and JSON requests. Use plain text only when the service explicitly documents exact-body AgentKit support outside the standard x402 hooks.
+- Do not use the CLI flow for arbitrary text, binary, multipart, or form-encoded bodies when the service's body handling is unknown. Use an AgentKit-aware framework integration or continue with the normal x402 payment flow.
+
+Example compact JSON body:
+
+```text
+{"query":"weather","city":"Lisbon"}
 ```
 
-If `agentkit.fetch` returns another 402, continue with the normal x402 payment flow.
+### 2. Ask the CLI to sign the request
 
-## Wallet Types
-
-Your wallet determines how you sign the challenge. There are two types:
-
-### EOA (Externally Owned Account)
-
-A standard wallet where you directly hold the private key (e.g. a raw private key, a mnemonic-derived wallet).
-
-- **Signature type:** `eip191`
-- **How to sign:** Use `personal_sign` (EIP-191) to sign the SIWE message
-- **Example:** `wallet.signMessage(siweMessage)`
-
-### Smart Contract Wallet (SCW)
-
-A wallet where the "account" is a smart contract and signing is done by an underlying owner key. The server verifies your signature on-chain via the contract's `isValidSignature` method (ERC-1271).
-
-Examples: Coinbase Smart Wallet, Safe, any ERC-4337 account.
-
-- **Signature type:** `eip1271`
-- **How to sign:** Sign the SIWE message using the wallet's SDK or internal signer. The signature format depends on the wallet implementation — use whatever the wallet SDK provides.
-- **Example (Coinbase CDP):** `account.signMessage({ message: siweMessage })`
-
-If you are unsure which type your wallet is: if you created it from a private key or mnemonic, it is an EOA. If you created it through a wallet SDK (Coinbase CDP, Safe SDK, etc.), it is likely an SCW.
-
-## The AgentKit Flow
-
-### Step 1: Parse the 402 Response
-
-When you receive a `402 Payment Required`, look for the `agentkit` extension in the response body. The 402 response contains `x402` data with extensions. The `agentkit` extension looks like:
-
-```json
-{
-  "agentkit": {
-    "info": {
-      "domain": "api.example.com",
-      "uri": "https://api.example.com/data",
-      "version": "1",
-      "nonce": "abc123",
-      "issuedAt": "2025-01-01T00:00:00.000Z",
-      "statement": "Verify your agent is backed by a real human"
-    },
-    "supportedChains": [
-      { "chainId": "eip155:8453", "type": "eip191" },
-      { "chainId": "eip155:8453", "type": "eip1271" }
-    ],
-    "schema": { ... }
-  }
-}
-```
-
-Key fields to extract:
-
-- **`info`** — the challenge data you must sign
-- **`supportedChains`** — which chains and signature types the server accepts
-- **`mode`** (if present) — tells you the access policy: `free`, `free-trial`, or `discount`
-
-### Step 2: Pick a Chain and Signature Type
-
-Match your wallet to one of the `supportedChains` entries:
-
-| Your wallet       | Match `chainId`      | Use `type`  |
-|--------------------|----------------------|-------------|
-| EVM EOA            | `eip155:*`           | `eip191`    |
-| EVM Smart Contract | `eip155:*`           | `eip1271`   |
-
-Pick the entry that matches both your chain and wallet type.
-
-### Step 3: Construct and Sign the SIWE Message
-
-Construct a SIWE (EIP-4361) message string from the challenge `info` fields. The format is a plain text string with this exact structure:
-
-```
-{domain} wants you to sign in with your Ethereum account:
-{address}
-
-{statement}
-
-URI: {uri}
-Version: {version}
-Chain ID: {numericChainId}
-Nonce: {nonce}
-Issued At: {issuedAt}
-```
-
-Where `{numericChainId}` is extracted from the CAIP-2 chain ID (e.g. `eip155:8453` becomes `8453`), and `{address}` must be EIP-55 checksummed.
-
-If the challenge includes optional fields, append them in this order (only include lines for fields that are present):
-
-```
-Expiration Time: {expirationTime}
-Not Before: {notBefore}
-Request ID: {requestId}
-Resources:
-- {resources[0]}
-- {resources[1]}
-```
-
-Full example:
-
-```
-api.example.com wants you to sign in with your Ethereum account:
-0xd8dA6BF26964aF9D7eEd9e03E53415D37aA96045
-
-Verify your agent is backed by a real human
-
-URI: https://api.example.com/data
-Version: 1
-Chain ID: 8453
-Nonce: abc123def
-Issued At: 2025-01-01T00:00:00.000Z
-Expiration Time: 2025-01-01T00:05:00.000Z
-Request ID: req-456
-Resources:
-- https://api.example.com/tos
-```
-
-**Important formatting rules:**
-- There must be a blank line before and after the `{statement}` line
-- If there is no statement, there must be a single blank line between the address and `URI:`
-- Each line ends with `\n` (LF, not CRLF)
-- No trailing newline after the last line
-
-Then sign the message string:
-
-```typescript
-// EOA — use personal_sign (EIP-191)
-const signature = await wallet.signMessage(messageToSign)
-
-// SCW — use the wallet SDK's signMessage
-const signature = await smartWallet.signMessage({ message: messageToSign })
-```
-
-### Step 4: Send the Request
-
-Base64-encode a JSON object containing the challenge `info` fields plus your `address`, `type`, and `signature`, and send it as the `agentkit` HTTP header:
-
-```typescript
-const header = btoa(JSON.stringify({
-  ...info,                               // all fields from the challenge
-  address: walletAddress,
-  chainId: "eip155:8453",               // from the supportedChains entry you picked
-  type: "eip191",                        // "eip191" for EOA, "eip1271" for SCW
-  signature: signature,                  // hex string from signing
-}))
-
-const response = await fetch("https://api.example.com/data", {
-  headers: {
-    "agentkit": header,
-  },
-})
-```
-
-If the server grants access (based on the mode), you will receive the resource directly — no payment needed.
-
-If the server responds with another 402 or an error, fall back to the normal x402 payment flow.
-
-## Access Modes
-
-The `mode` field in the AgentKit extension tells you what to expect:
-
-| Mode         | What it means                                                  |
-|--------------|----------------------------------------------------------------|
-| `free`       | Human-backed agents always get free access                     |
-| `free-trial` | First N requests are free, then you must pay (N is per human, not per agent) |
-| `discount`   | You get N% off the price (pay the discounted amount via x402)  |
-
-For `discount` mode: send **both** the `agentkit` header and the x402 payment header, but pay the discounted price. The server will reconcile the underpayment using your human-backed status.
-
-## Common Errors and How to Handle Them
-
-### "Agent is not registered in the AgentBook"
-
-Your wallet address is not registered. You need to register first using the AgentKit CLI:
+Pass the HTTP method, the full URL (including any query string), and the exact body:
 
 ```bash
-npx @worldcoin/agentkit-cli register <your-wallet-address>
+agentkit prove POST 'https://api.example.com/data' '<exact-request-body>'
 ```
 
-This opens a World ID verification flow that ties your wallet to an anonymous human identifier on-chain. Registration only needs to happen once per wallet.
+For a bodyless request:
 
-### "Signature verification failed"
+```bash
+agentkit prove GET 'https://api.example.com/data'
+```
 
-- **Wrong signature type:** Make sure `type` matches your wallet. Use `eip191` for EOA, `eip1271` for SCW.
-- **Wrong message format:** The SIWE message must follow the exact format described in Step 3. Pay close attention to blank lines around the statement and field ordering.
-- **Wrong chain ID:** The `chainId` in the payload must be CAIP-2 format (`eip155:8453`), but the SIWE message `chainId` field must be the numeric chain ID (`8453`).
+If the CLI is not installed globally:
 
-### "Invalid agentkit header: not valid base64"
+```bash
+npx @worldcoin/agentkit-cli prove POST 'https://api.example.com/data' '<exact-request-body>'
+```
 
-Your header is not properly base64-encoded. Ensure you are encoding the full JSON string: `btoa(JSON.stringify(payload))`.
+The command:
 
-### "Message validation failed" / "issuedAt is too old"
+- loads the existing AgentKit identity without creating a key;
+- checks that its address is registered in AgentBook; and
+- returns a `headers` object with three values: `Content-Digest`, `Signature-Input`, and `Signature`.
 
-The challenge has expired. Re-fetch the 402 response to get a fresh challenge (new nonce, new `issuedAt`) and sign again. Challenges expire after 5 minutes by default.
+Copy all three returned header values onto the retry unmodified. Do not encode, decode, wrap, or edit them.
 
-### "Unsupported chain namespace"
+### 3. Retry the original request
 
-You are using a chain that the server does not support. Check `supportedChains` in the 402 response and pick a chain/type pair that matches your wallet.
+Repeat the request with the exact same method, URL, prepared body, and other headers, adding the three headers returned by `prove`:
+
+```text
+Content-Digest: <returned Content-Digest>
+Signature-Input: <returned Signature-Input>
+Signature: <returned Signature>
+```
+
+The retried method, URL, and body must exactly match what was passed to `prove`. In particular, if JSON was compacted before signing, send that compact form on the retry.
+
+Signed headers expire after five minutes. Run `prove` again for every request — never reuse headers across different requests or after any change to the request.
+
+If the service grants access, return the resource without paying. If it responds with another 402, interpret the access mode before deciding whether to pay.
+
+## Handle access modes
+
+Read `extensions.agentkit.mode` when present:
+
+| Mode         | Behavior                                                                                                                                                |
+| ------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `free`       | Retry with the signature headers and no payment.                                                                                                        |
+| `free-trial` | Retry with the signature headers and no payment until the service reports that the per-human allowance is exhausted. Then use the normal payment flow. |
+| `discount`   | Keep the signature headers on the request and use the normal x402 payment flow with the discounted amount advertised by the service.                    |
+
+If no mode is present, try the signature headers without payment first.
+
+## Recover from errors
+
+### `KEY_NOT_FOUND`
+
+No local AgentKit identity exists. Run:
+
+```bash
+agentkit register
+```
+
+Registration creates the local identity, checks AgentBook, and starts World ID verification only when needed. Human action may be required. After registration completes, run `prove` again for the same request.
+
+### `AGENT_NOT_REGISTERED`
+
+The existing identity has not been registered. Run `agentkit register`, complete World ID verification, then run `prove` again.
+
+### `IDENTITY_LOAD_FAILED`
+
+The local key is inaccessible or invalid. Report the error. Do not replace, regenerate, expose, or repair the key unless the user explicitly asks; replacing it changes the agent identity.
+
+### `REGISTRATION_LOOKUP_FAILED`
+
+The CLI could not check AgentBook. Retry when connectivity is available. If authentication remains unavailable and the service requires payment, continue with the normal x402 payment flow.
+
+### `SIGNING_FAILED`
+
+Report the signing failure and retry once. Never ask the user to paste the private key.
+
+### Server rejects the signature
+
+Verify that all three headers were copied unmodified, that the retry used the exact method, URL, and body passed to `prove`, and that the headers are fresh — they expire after five minutes. Run `prove` again after any change or rejection. If a second freshly signed retry is rejected and the service still requires payment, continue with the normal x402 payment flow.

@@ -1,69 +1,42 @@
-# AgentKit Extension
+# AgentKit x402 Extension
 
-Verify that an agent is backed by a real, World ID-verified human.
+Add proof-of-personhood access policies to x402 resources. A registered agent signs its request with an RFC 9421 HTTP message signature, the server verifies the signature through the canonical AgentBook on World Chain, and the access policy is applied per lookup ID.
 
 ## Install
-
-Install the library from npm:
 
 ```bash
 npm install @worldcoin/agentkit
 ```
 
-or:
+For local agent registration:
 
 ```bash
-bun add @worldcoin/agentkit
+npx @worldcoin/agentkit-cli register
 ```
 
-If you also need the registration CLI, install:
+## Access modes
 
-```bash
-npm install -g @worldcoin/agentkit-cli
-```
+| Mode         | Behavior                                                                                          |
+| ------------ | ------------------------------------------------------------------------------------------------- |
+| `free`       | Registered agents bypass payment.                                                                 |
+| `free-trial` | The first N requests per human and endpoint bypass payment.                                       |
+| `discount`   | Registered agents may pay a configured percentage less, optionally for only the first N requests. |
 
-or run it with:
+`free-trial` and `discount` require an `AgentKitStorage` implementation. Usage is keyed by the AgentBook lookup ID, so multiple registered agents belonging to one person share the same allowance.
 
-```bash
-npx @worldcoin/agentkit-cli register <agent-address>
-```
+## Request flow
 
-For the end-user registration flow, see [`../cli/REGISTRATION.md`](../cli/REGISTRATION.md).
+1. The client calls the protected resource normally.
+2. The server returns `402 Payment Required` with `extensions.agentkit`.
+3. The client signs the request under the AgentKit RFC 9421 profile — binding the method, host, path, query string, a digest of the normalized body, and a five-minute validity window — then retries with the `Signature-Input`, `Signature`, and `Content-Digest` headers.
+4. The server calls Core's `verify(request)`, which rebuilds the signature base from the request it actually received, recovers the signer, and resolves its lookup ID from AgentBook on World Chain.
+5. The hooks grant access, consume a trial use, or prepare a discounted payment according to the configured mode.
 
-## Overview
+The `agentkit` string is the lowercase x402 extension key. The request carries the standard RFC 9421 headers `Signature-Input` and `Signature` (labeled `agentkit`) plus `Content-Digest`.
 
-Services that deal with automated traffic increasingly need to distinguish between "random bot" and "bot acting on behalf of a human". AgentKit solves this by combining the wallet every x402 agent already has with World ID's proof-of-personhood and an on-chain agent registry (the AgentBook).
+## Client
 
-- Agents register in the AgentBook smart contract using a World ID proof, tying their wallet address to an anonymous human identifier
-- When accessing a protected resource, agents sign a CAIP-122 challenge with their wallet
-- The server verifies the signature, looks up the agent's human identifier in the AgentBook, and applies the configured access policy
-- Usage limits are tracked per human, not per agent, allowing for multiple agents to share a single human-backed identity
-
-This is a **Server ↔ Client** extension. The Facilitator is not involved in identity verification itself, but `discount` mode still requires wiring `verifyFailureHook` into the payment flow.
-
-## Access Modes
-
-AgentKit supports three configurable modes that control what happens when a human-backed agent is identified:
-
-| Mode         | Behavior                                                                                                   |
-| ------------ | ---------------------------------------------------------------------------------------------------------- |
-| `free`       | Human-backed agents always bypass payment.                                                                 |
-| `free-trial` | Human-backed agents bypass payment the first N times (default: 1). After that, normal payment is required. |
-| `discount`   | Human-backed agents get a N% discount (optionally, only for the first N times).                            |
-
-Usage counters are tracked per **human** per **endpoint** — so two agents backed by the same human share the same counter.
-
-## How It Works
-
-1. Client requests a protected resource
-2. Server responds with `402 Payment Required`, including the `agentkit` extension with a CAIP-122 challenge (nonce, domain, supported chains, mode)
-3. Client signs the challenge with their wallet and sends it via the `agentkit` HTTP header
-4. Server validates the signature, recovers the wallet address, and looks up the human identifier in the AgentBook
-5. If the agent is registered and the access mode allows it, access is granted or a discount is applied. Otherwise, the standard payment flow continues.
-
-## Agent Client Usage
-
-If you are building an agent that calls paid x402 APIs, create an AgentKit client and use `agentkit.fetch` for those calls. The client retries AgentKit-enabled 402 responses with a signed `agentkit` header before your normal x402 payment fallback runs.
+`createAgentkitClient` wraps `fetch`. It tries AgentKit once when a 402 response advertises the extension, then returns the retry response to the caller. It does not create or settle x402 payments.
 
 ```typescript
 import { createAgentkitClient } from '@worldcoin/agentkit'
@@ -71,87 +44,70 @@ import { createAgentkitClient } from '@worldcoin/agentkit'
 const agentkit = createAgentkitClient({
 	signer: {
 		address: agentWallet.address,
-		chainId: 'eip155:8453',
-		type: 'eip191',
-		signMessage: message => agentWallet.signMessage(message),
+		signMessage: message => agentWallet.signMessage({ message }),
 	},
 })
 
-const response = await agentkit.fetch('https://api.example.com/data')
-```
-
-The client does not create payments. If AgentKit is unavailable, fails, or is exhausted, it returns the original 402 response so your existing x402 client can pay normally.
-
-### Framework Examples
-
-You do not need separate framework packages for V1. Use the same helper where your framework makes HTTP calls:
-
-```typescript
-// Vercel AI SDK / OpenAI Agents SDK tool body
-const response = await agentkit.fetch(url, requestInit)
-```
-
-```typescript
-// LangChain or LangGraph tool
-const callPaidApi = tool(async ({ url }) => agentkit.fetch(url), {
-	name: 'call_paid_api',
-	description: 'Call paid APIs; AgentKit verification is attempted before x402 payment.',
+const response = await agentkit.fetch('https://api.example.com/data', {
+	method: 'POST',
+	headers: { 'Content-Type': 'application/json' },
+	body: JSON.stringify({ query: 'weather', city: 'Lisbon' }),
 })
 ```
 
+For JSON, the wrapper parses and serializes the body once, signs that compact representation, and transmits the same representation on the retry. Bodyless requests sign the empty string.
+
+The built-in x402 adapters expose parsed JSON rather than raw request bytes. The portable hooks path therefore supports bodyless and JSON requests. For text, form, multipart, binary, or any route that must authenticate the original wire representation, call `verify(request)` in framework-level middleware while the original Web `Request` is available.
+
+### Custom clients
+
+`createHeaders({ method, url, body })` returns the three signature headers to place on the request:
+
 ```typescript
-// Coinbase AgentKit custom action
-const action = async ({ url }) => agentkit.fetch(url)
+const body = { query: 'weather', city: 'Lisbon' }
+const signatureHeaders = await agentkit.createHeaders({ method: 'POST', url, body })
+
+const response = await fetch(url, {
+	method: 'POST',
+	headers: {
+		'Content-Type': 'application/json',
+		...signatureHeaders,
+	},
+	body: JSON.stringify(body),
+})
 ```
 
-For Hermes, Codex, Claude Code, and other local agents, either call code that uses `createAgentkitClient` or install the `agentkit-x402` skill so the agent knows to attempt AgentKit before payment when it cannot change the HTTP client.
+When using `createHeaders` directly, the request must use the exact method and URL that were signed, and the sent body must match `normalizeAgentkitBody(body)` exactly. Signed headers expire after five minutes — create fresh headers for every request.
 
-## Server Usage
+## Server hooks
 
-AgentKit is published as `@worldcoin/agentkit` and is intended to be consumed as a normal npm package in your server application.
-
-### Hooks (Recommended)
-
-The hooks-based approach handles challenge generation, signature verification, and AgentBook lookups automatically.
+The hooks integrate with `x402HTTPResourceServer` and, for discounts, the facilitator client.
 
 ```typescript
 import { Hono } from 'hono'
 import { serve } from '@hono/node-server'
+import { HTTPFacilitatorClient } from '@x402/core/http'
 import { ExactEvmScheme } from '@x402/evm/exact/server'
-import { HTTPFacilitatorClient, RouteConfig } from '@x402/core/http'
-import { paymentMiddlewareFromHTTPServer, x402ResourceServer, x402HTTPResourceServer } from '@x402/hono'
+import { paymentMiddlewareFromHTTPServer, x402HTTPResourceServer, x402ResourceServer } from '@x402/hono'
 import {
-	declareAgentkitExtension,
+	InMemoryAgentKitStorage,
 	agentkitResourceServerExtension,
 	createAgentkitHooks,
-	createAgentBookVerifier,
-	InMemoryAgentKitStorage,
+	declareAgentkitExtension,
 } from '@worldcoin/agentkit'
 
-const NETWORK = 'eip155:8453' // Base
-const payTo = '0xYourAddress'
-
-const agentBook = createAgentBookVerifier()
-const storage = new InMemoryAgentKitStorage()
-
-const hooks = createAgentkitHooks({
-	storage,
-	agentBook,
-	mode: { type: 'free-trial', uses: 3 },
-})
-
-const facilitatorClient = new HTTPFacilitatorClient({
-	url: 'https://x402.org/facilitator',
-})
-
-const resourceServer = new x402ResourceServer(facilitatorClient)
+const NETWORK = 'eip155:8453'
+const facilitator = new HTTPFacilitatorClient({ url: 'https://x402.org/facilitator' })
+const resourceServer = new x402ResourceServer(facilitator)
 	.register(NETWORK, new ExactEvmScheme())
 	.registerExtension(agentkitResourceServerExtension)
 
-// Register the verify failure hook on the facilitator (required for discount mode)
-if (hooks.verifyFailureHook) {
-	facilitatorClient.onVerifyFailure(hooks.verifyFailureHook)
-}
+const hooks = createAgentkitHooks({
+	mode: { type: 'free-trial', uses: 3 },
+	storage: new InMemoryAgentKitStorage(),
+})
+
+if (hooks.verifyFailureHook) facilitator.onVerifyFailure(hooks.verifyFailureHook)
 
 const routes = {
 	'GET /data': {
@@ -160,351 +116,161 @@ const routes = {
 				scheme: 'exact',
 				price: '$0.01',
 				network: NETWORK,
-				payTo,
+				payTo: '0xYourAddress',
 			},
 		],
 		extensions: declareAgentkitExtension({
-			statement: 'Verify your agent is backed by a real human',
 			mode: { type: 'free-trial', uses: 3 },
 		}),
 	},
 }
 
 const httpServer = new x402HTTPResourceServer(resourceServer, routes).onProtectedRequest(hooks.requestHook)
-
 const app = new Hono()
-app.use(paymentMiddlewareFromHTTPServer(httpServer))
 
-app.get('/data', c => {
-	return c.json({ message: 'Protected content' })
-})
+app.use(paymentMiddlewareFromHTTPServer(httpServer))
+app.get('/data', c => c.json({ message: 'Protected content' }))
 
 serve({ fetch: app.fetch, port: 4021 })
 ```
 
-If your paid route runs on World Chain (`eip155:480`), add a custom `registerMoneyParser(...)` for World Chain USDC on `ExactEvmScheme`. AgentBook lookup always resolves against the canonical World Chain deployment — your paid route can run on any EVM chain, but the registry check happens on World Chain.
+The payment network can be any network supported by the configured x402 scheme and facilitator. AgentBook lookup is independent of it and always uses the canonical World Chain deployment.
 
-### Mode Examples
-
-In **Free access** mode, human-backed agents never pay:
+### Free access
 
 ```typescript
-const hooks = createAgentkitHooks({
-	agentBook,
-	mode: { type: 'free' },
-})
+const hooks = createAgentkitHooks({ mode: { type: 'free' } })
 ```
 
-No storage is needed for this mode.
+No storage is required.
 
-In **Free trial** mode, the first N uses are free per human per endpoint:
+### Free trial
 
 ```typescript
 const hooks = createAgentkitHooks({
-	agentBook,
 	mode: { type: 'free-trial', uses: 5 },
 	storage: new InMemoryAgentKitStorage(),
 })
 ```
 
-If Alice has two agents and uses 3 of her 5 free uses with Agent A, Agent B gets 2 remaining.
+Use persistent, atomic storage in production. `InMemoryAgentKitStorage` is intended for examples and single-process development.
 
-In **Discount** mode, human-backed agents get N% off the first N times:
+### Discount
 
 ```typescript
 const hooks = createAgentkitHooks({
-	agentBook,
 	mode: { type: 'discount', percent: 50, uses: 10 },
 	storage: new InMemoryAgentKitStorage(),
 })
 
-// IMPORTANT: register the verify failure hook on the facilitator for discount mode
-facilitatorClient.onVerifyFailure(hooks.verifyFailureHook!)
+facilitator.onVerifyFailure(hooks.verifyFailureHook!)
 ```
 
-The client pays the discounted price. Payment verification fails (amount too low), but the `onVerifyFailure` hook on the facilitator recovers it by confirming the agent is human-backed with remaining discount uses, then adjusting the required amount so settlement re-verification passes.
+The payment must come from the same address that signed the AgentKit body. Discount mode requires control of the facilitator hook path; it cannot be implemented only at the resource server.
 
-### Smart Wallet Support (EIP-1271 / EIP-6492)
+## Direct framework verification
 
-Signature verification automatically handles both smart contract wallets (ERC-1271) and EOA wallets (ecrecover). Smart wallets like Safe, Coinbase Smart Wallet, and CDP wallets work out of the box with no additional configuration. A public client is created internally from the chain ID to make the on-chain `isValidSignature` call when needed.
-
-ERC-1271 verification uses the `chainId` in the signed AgentKit payload. This is separate from AgentBook lookup, which still resolves against the canonical World Chain registry. Built-in public RPCs are used by default for Base, World Chain, Tempo, and Arc, so most integrations do not need RPC configuration for those signing chains.
-
-To accept smart-account signatures from contracts deployed on chains other than World Chain, advertise those signing chains in `declareAgentkit({ network: ... })`. If you need private or higher-quota RPC endpoints, override them per chain:
+When the framework exposes the original Fetch `Request`, use Core directly for exact-byte verification:
 
 ```typescript
-const hooks = createAgentkitHooks({
-	agentBook,
-	mode: { type: 'free' },
-	rpcUrls: {
-		'eip155:480': 'https://your-world-chain-rpc.example',
-		'eip155:8453': 'https://your-base-rpc.example',
-	},
-})
-```
+import { verify } from '@worldcoin/agentkit-core'
 
-`rpcUrl` is still supported as a fallback RPC for EVM signature verification, but `rpcUrls` is preferred when multiple signing chains are accepted.
+export async function POST(request: Request) {
+	const lookupId = await verify(request)
+	const body = await request.json()
 
-### Custom AgentBook Configuration
-
-`createAgentBookVerifier()` always resolves against the canonical AgentBook deployment on World Chain (`eip155:480`). You do not need to pass a chain ID — the registry lives on one chain and lookup happens there regardless of which chain the agent signed on or which chain your paid route runs on. The caller side stays fully chain‑agnostic.
-
-```typescript
-// Default — queries the canonical AgentBook on World Chain
-const agentBook = createAgentBookVerifier()
-
-// Use a custom World Chain RPC endpoint
-const agentBook = createAgentBookVerifier({
-	rpcUrl: 'https://your-world-chain-rpc.example',
-})
-
-// Point at a custom contract (e.g. staging/testnet), still on World Chain RPC
-const agentBook = createAgentBookVerifier({
-	contractAddress: '0xYourCustomContract',
-})
-
-// Advanced: inject a fully custom viem client (useful for tests or non-standard setups)
-import { worldchain } from 'viem/chains'
-import { createPublicClient, http } from 'viem'
-
-const agentBook = createAgentBookVerifier({
-	client: createPublicClient({ chain: worldchain, transport: http() }),
-})
-```
-
-### Manual Usage (Advanced)
-
-For custom flows, use the low-level functions directly:
-
-```typescript
-import {
-	declareAgentkitExtension,
-	parseAgentkitHeader,
-	validateAgentkitMessage,
-	verifyAgentkitSignature,
-	createAgentBookVerifier,
-	AGENTKIT,
-} from '@worldcoin/agentkit'
-
-// Include in 402 response
-const extensions = declareAgentkitExtension({
-	domain: 'api.example.com',
-	resourceUri: 'https://api.example.com/data',
-	network: 'eip155:8453',
-	statement: 'Verify your agent is backed by a real human',
-})
-
-const agentBook = createAgentBookVerifier()
-
-// Process incoming authentication
-async function handleRequest(request: Request) {
-	const header = request.headers.get('agentkit')
-	if (!header) return
-
-	const payload = parseAgentkitHeader(header)
-
-	const validation = await validateAgentkitMessage(payload, 'https://api.example.com/data')
-	if (!validation.valid) {
-		return { error: validation.error }
-	}
-
-	const verification = await verifyAgentkitSignature(payload)
-	if (!verification.valid) {
-		return { error: verification.error }
-	}
-
-	// Look up the human behind this agent (always resolves against World Chain AgentBook)
-	const humanId = await agentBook.lookupHuman(verification.address!)
-	if (!humanId) {
-		return { error: 'Agent is not registered in the AgentBook' }
-	}
-
-	// humanId is the anonymous human identifier
-	// Apply your own access policy based on this
+	return Response.json({ lookupId, body })
 }
 ```
 
-## EVM Network Support
+`verify` clones the request, so the handler can still read the original body. This is the preferred path for non-JSON bodies and for applications that cannot accept JSON normalization.
 
-Servers can accept authentication on any EVM network expressed as a CAIP-2 chain ID:
-
-```typescript
-const routes = {
-	'GET /data': {
-		accepts: [
-			{
-				scheme: 'exact',
-				price: '$0.01',
-					network: 'eip155:8453', // Base
-					payTo: '0xYourEVMAddress',
-				},
-			],
-			extensions: declareAgentkitExtension({
-				network: 'eip155:8453',
-				statement: 'Verify your agent is backed by a real human',
-			}),
-		},
-}
-```
-
-## Supported Chains
-
-- **Chain ID format:** `eip155:*` (e.g., `eip155:8453` for Base)
-- **Signature type:** `eip191`
-- **Signature schemes:** `eip191` (EOA, default), `eip1271` (smart contract), `eip6492` (counterfactual)
-- **Message format:** EIP-4361 (SIWE)
-
-## API Reference
+## API reference
 
 ### `declareAgentkitExtension(options?)`
 
-Configures the extension for 402 responses. Most parameters are auto-derived from request context when using `agentkitResourceServerExtension`.
+Creates the `agentkit` extension declaration for a route.
 
-| Parameter           | Type                 | Description                                               |
-| ------------------- | -------------------- | --------------------------------------------------------- |
-| `domain`            | `string`             | Server's domain. Auto-derived from request URL.           |
-| `resourceUri`       | `string`             | Full resource URI. Auto-derived from request URL.         |
-| `network`           | `string \| string[]` | CAIP-2 network(s). Auto-derived from `accepts[].network`. |
-| `statement`         | `string`             | Human-readable purpose for signing.                       |
-| `version`           | `string`             | CAIP-122 version (default: `"1"`).                        |
-| `expirationSeconds` | `number`             | Challenge TTL in seconds.                                 |
-| `mode`              | `AgentkitMode`       | Access mode (included in 402 response for clients).       |
+| Option | Type           | Description                               |
+| ------ | -------------- | ----------------------------------------- |
+| `mode` | `AgentkitMode` | Access mode included in the 402 response. |
+
+### `agentkitResourceServerExtension`
+
+Register this with `x402ResourceServer.registerExtension(...)`. It adds the public AgentKit extension data to 402 responses and removes the declaration's private options.
 
 ### `createAgentkitClient(options)`
 
-Creates a client that tries AgentKit verification before normal x402 payment.
+| Option    | Type                                                                  | Description                                     |
+| --------- | ---------------------------------------------------------------------- | ------------------------------------------------ |
+| `signer`  | `{ address: string; signMessage(message: string): Promise<string> }` | Agent address and EIP-191 signer.               |
+| `fetch`   | `typeof fetch`                                                        | Optional underlying fetch implementation.       |
+| `onEvent` | `(event: AgentkitFetchEvent) => void`                                 | Optional client event callback.                 |
 
-| Option    | Type                                     | Description                                         |
-| --------- | ---------------------------------------- | --------------------------------------------------- |
-| `signer`  | `AgentkitSigner`                         | Agent wallet identity and `signMessage` function.   |
-| `fetch`   | `typeof fetch`                           | Optional base fetch implementation.                 |
-| `onEvent` | `(event: AgentkitFetchEvent) => void`    | Optional callback for logging and debugging.        |
+Returns:
 
-`agentkit.fetch` has the same shape as `fetch`. It only retries when the first response is a 402 with `extensions.agentkit`.
-
-**Returns:**
-
-| Field          | Type                                      | Description                                                                 |
-| -------------- | ----------------------------------------- | --------------------------------------------------------------------------- |
-| `fetch`        | `typeof fetch`                            | Fetch-compatible function that retries AgentKit-enabled 402 responses once. |
-| `createHeader` | `(extension: AgentkitExtension) => Promise<string>` | Creates the base64 `agentkit` HTTP header for custom HTTP clients. |
+| Field                                | Description                                                                                     |
+| ------------------------------------ | ------------------------------------------------------------------------------------------------ |
+| `fetch`                              | Fetch-compatible function that retries AgentKit-enabled 402 responses once.                     |
+| `createHeaders({ method, url, body })` | Signs the request under the AgentKit RFC 9421 profile and returns the three signature headers. |
 
 ### `createAgentkitHooks(options)`
 
-Creates hooks for `x402HTTPResourceServer` and optionally `x402ResourceServer`.
+| Option    | Type                                 | Description                               |
+| --------- | ------------------------------------ | ----------------------------------------- |
+| `mode`    | `AgentkitMode`                       | Defaults to `{ type: "free" }`.           |
+| `storage` | `AgentKitStorage`                    | Required for `free-trial` and `discount`. |
+| `onEvent` | `(event: AgentkitHookEvent) => void` | Optional server event callback.           |
 
-| Option      | Type                                 | Description                                                                                    |
-| ----------- | ------------------------------------ | ---------------------------------------------------------------------------------------------- |
-| `agentBook` | `AgentBookVerifier`                  | AgentBook verifier instance (required).                                                        |
-| `mode`      | `AgentkitMode`                       | Access mode (default: `{ type: "free" }`).                                                     |
-| `storage`   | `AgentKitStorage`                    | Storage for usage tracking (required for `free-trial` and `discount`).                         |
-| `rpcUrl`    | `string`                             | Fallback custom RPC URL for EVM signature verification. Uses the signed chain's default public RPC if omitted. |
-| `rpcUrls`   | `Record<string, string>`             | Custom EVM signature-verification RPC URLs keyed by signed CAIP-2 chain ID, e.g. `{ "eip155:8453": "https://..." }`. |
-| `onEvent`   | `(event: AgentkitHookEvent) => void` | Callback for logging/debugging.                                                                |
+Returns `requestHook` and, only for discount mode, `verifyFailureHook`.
 
-**Returns:**
+### `AgentKitStorage`
 
-| Field               | Type                  | Description                                                                      |
-| ------------------- | --------------------- | -------------------------------------------------------------------------------- |
-| `requestHook`       | function              | Register with `httpServer.onProtectedRequest()`.                                 |
-| `verifyFailureHook` | function \| undefined | Register with `facilitator.onVerifyFailure()`. Only present for `discount` mode. |
+```typescript
+interface AgentKitStorage {
+	tryIncrementUsage(endpoint: string, lookupId: string, limit: number): Promise<boolean>
+}
+```
 
-### `AgentkitMode`
+The check and increment must be atomic.
 
-| Mode         | Fields                                                 | Description                                    |
-| ------------ | ------------------------------------------------------ | ---------------------------------------------- |
-| `free`       | `{ type: "free" }`                                     | Always bypass payment for human-backed agents. |
-| `free-trial` | `{ type: "free-trial"; uses?: number }`                | Bypass payment the first N times (default: 1). |
-| `discount`   | `{ type: "discount"; percent: number; uses?: number }` | N% discount the first N times.                 |
+### Body helpers
 
-### `createAgentBookVerifier(options?)`
+- `normalizeAgentkitBody(body)` converts a parsed body to the UTF-8 text used for signing.
+- `normalizeAgentkitRequestBody(request)` reads and normalizes a client's Fetch request body.
+- `AGENTKIT` is the x402 extension key, `agentkit`.
+- `AGENTKIT_SIGNATURE_INPUT_HEADER`, `AGENTKIT_SIGNATURE_HEADER`, and `AGENTKIT_CONTENT_DIGEST_HEADER` are the request header names `Signature-Input`, `Signature`, and `Content-Digest`.
 
-Creates a verifier that looks up agent wallet addresses in the canonical AgentBook contract on World Chain (`eip155:480`). Lookup always resolves against World Chain — the verifier is chain‑agnostic from the caller's perspective, regardless of which chain the agent's signature was produced on or which chain your paid route runs on.
+## Security considerations
 
-| Option            | Type                | Description                                                                                                  |
-| ----------------- | ------------------- | ------------------------------------------------------------------------------------------------------------ |
-| `rpcUrl`          | `string`            | Custom World Chain RPC URL. Defaults to the chain's default public RPC. Ignored if `client` is provided.     |
-| `contractAddress` | `` `0x${string}` `` | Custom AgentBook contract address on World Chain. Defaults to the canonical deployment.                      |
-| `client`          | `PublicClient`      | Advanced override — inject a fully custom viem public client (useful for tests or non-standard deployments). |
-
-Returns an object with `lookupHuman(address: string): Promise<string | null>`. Returns the anonymous human identifier (hex string) or `null` if the agent is not registered.
-
-### `AgentKitStorage` / `InMemoryAgentKitStorage`
-
-Storage interface for tracking per-human usage counts.
-
-| Method                                        | Description                                                                                                   |
-| --------------------------------------------- | ------------------------------------------------------------------------------------------------------------- |
-| `tryIncrementUsage(endpoint, humanId, limit)` | Atomically increment usage if below `limit`. Returns `true` if incremented, `false` if limit already reached. |
-| `hasUsedNonce?(nonce)`                        | Optional: check for replay attacks.                                                                           |
-| `recordNonce?(nonce)`                         | Optional: record a used nonce.                                                                                |
-
-`InMemoryAgentKitStorage` is the reference in-memory implementation. For production, implement `AgentKitStorage` with a persistent backend (e.g. using a database transaction with row-level locking).
-
-### `parseAgentkitHeader(header)`
-
-Parses a base64-encoded `agentkit` header into a structured payload object. Throws if the header is malformed or missing required fields.
-
-### `validateAgentkitMessage(payload, resourceUri, options?)`
-
-Validates message fields including domain binding, URI, timestamps, and nonce.
-
-| Option       | Type                         | Description                                        |
-| ------------ | ---------------------------- | -------------------------------------------------- |
-| `maxAge`     | `number`                     | Max age for `issuedAt` in ms (default: 5 minutes). |
-| `checkNonce` | `(nonce: string) => boolean` | Custom nonce validation function.                  |
-
-Returns `{ valid: boolean; error?: string }`.
-
-### `verifyAgentkitSignature(payload, options?)`
-
-Verifies the cryptographic signature and recovers the signer address. EVM verification uses ERC-1271 (smart wallets) with ecrecover fallback (EOA) automatically.
-
-| Option    | Type                     | Description                                                                                    |
-| --------- | ------------------------ | ---------------------------------------------------------------------------------------------- |
-| `rpcUrl`  | `string`                 | Fallback custom RPC URL for EVM signature verification. Uses the signed chain's default public RPC if omitted. |
-| `rpcUrls` | `Record<string, string>` | Custom EVM signature-verification RPC URLs keyed by signed CAIP-2 chain ID.                    |
-
-Returns `{ valid: boolean; address?: string; error?: string }`.
-
-**Hook events:**
-
-| Event                | Fields                           | Description                                            |
-| -------------------- | -------------------------------- | ------------------------------------------------------ |
-| `agent_verified`     | `resource`, `address`, `humanId` | Agent is human-backed, access granted.                 |
-| `agent_not_verified` | `resource`, `address`            | Valid signature but agent not registered in AgentBook. |
-| `validation_failed`  | `resource`, `error`              | Signature or message validation failed.                |
-| `discount_applied`   | `resource`, `address`, `humanId` | Discount mode: payment recovered at discounted rate.   |
-| `discount_exhausted` | `resource`, `address`, `humanId` | Discount mode: no more discounted uses remaining.      |
-
-## Security Considerations
-
-- **Domain binding**: The signed message includes the server's domain, preventing signature reuse across services.
-- **Nonce uniqueness**: A fresh nonce is generated per request to prevent replay attacks.
-- **Temporal bounds**: `issuedAt` must be recent (default: 5 minutes) and `expirationTime` must be in the future.
-- **Chain-specific verification**: Signatures are verified using chain-appropriate methods, preventing cross-chain reuse.
-- **Smart wallet support**: EVM verification automatically supports both smart contract wallets (ERC-1271) and EOA wallets via RPC calls to the chain.
-- **On-chain verification**: AgentBook lookups happen at request time, so revoked registrations take effect immediately.
-- **Per-human tracking**: Usage limits are tracked by anonymous human identifier, not by wallet address. Multiple agents controlled by one person share a single counter.
+- The signature binds the method, host, path, query string, a digest of the normalized body, and a five-minute validity window. The server rebuilds every covered component from the request it actually received, so a signature cannot be replayed against a different service, endpoint, or payload.
+- A byte-identical request can be replayed until its signature expires (at most five minutes). Nonce-based single-use signatures are a planned follow-up; until then, keep protected operations idempotent where duplicate execution would be harmful.
+- Core uses recoverable EIP-191 EOA signatures over the RFC 9421 signature base, and the recovered signer must match the `keyid` address. Smart-contract and counterfactual-wallet signatures are not yet supported.
+- Addresses surfaced by the SDK (`verifyRequest` results, hook events, the recovered discount payer) are EIP-55 checksummed; the wire-format `keyid` is lowercase. Always compare addresses case-insensitively.
+- The signature binds `@authority`, so the URL the server verifies against must reflect the public host. Behind a proxy, make sure the framework applies `X-Forwarded-Host` (or equivalent) before the hook reads the request URL.
+- AgentBook is queried on World Chain when the lookup ID is not in the short-lived cache, so registration state is not selected by the x402 payment network.
+- JSON normalization is part of the x402 hooks contract. A custom client must sign and send the same normalized representation.
+- Trial and discount storage must be atomic and persistent in production.
 
 ## Troubleshooting
 
 ### Signature verification fails
 
-- Verify the client is signing with the correct wallet
-- Check the signature scheme matches (EIP-191 for EOA, EIP-1271 for smart wallets)
-- If using a custom `rpcUrl`, ensure it points to the correct chain
-- Confirm the chain ID is consistent between client and server
+- Confirm all three headers are present: `Signature-Input`, `Signature`, and `Content-Digest`.
+- Confirm the headers were copied unmodified and the signature has not expired (five-minute window).
+- Confirm the retry uses the exact method and URL (including the query string) that were signed.
+- Confirm the retried body is the same normalized body that was signed.
+- Behind a proxy, confirm the server sees the public host the client signed, not an internal one.
+- For the hooks path, use an empty or JSON request body.
 
-### Message validation fails
+### AgentBook lookup fails
 
-- Check that `issuedAt` is recent (within 5 minutes by default)
-- Verify `expirationTime` is in the future
-- Ensure the `domain` matches the server's hostname
-- Confirm the `uri` starts with the server's origin
+- Confirm the signing identity completed `agentkit register`.
+- Confirm the service can reach World Chain.
+- Confirm the identity is registered in the canonical AgentBook deployment.
 
-### AgentBook lookup returns null
+### AgentKit retry still returns 402
 
-- Verify the agent wallet has been registered in the AgentBook with a valid World ID proof
-- Ensure the World Chain RPC endpoint is reachable (or your custom `rpcUrl` if one was provided)
-- If you overrode `contractAddress`, confirm the deployment you're pointing at is the one holding your registration
+- Check whether the free-trial or discount allowance is exhausted.
+- Check the hook event callback for `agent_not_verified` or `validation_failed`.
+- If AgentKit is unavailable, continue with the normal x402 payment flow.

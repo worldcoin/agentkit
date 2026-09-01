@@ -1,5 +1,13 @@
-// Re-export everything from core
-export * from '@worldcoin/agentkit-core'
+// x402 protocol
+export {
+	AGENTKIT,
+	AGENTKIT_CONTENT_DIGEST_HEADER,
+	AGENTKIT_SIGNATURE_HEADER,
+	AGENTKIT_SIGNATURE_INPUT_HEADER,
+	normalizeAgentkitBody,
+	normalizeAgentkitRequestBody,
+} from './protocol'
+export type { AgentkitExtension } from './protocol'
 
 // x402-specific types
 export type { AgentkitMode, DeclareAgentkitOptions } from './types'
@@ -10,13 +18,7 @@ export { agentkitResourceServerExtension } from './server'
 
 // x402 client integration
 export { createAgentkitClient } from './client'
-export type {
-	AgentkitClient,
-	AgentkitFetchEvent,
-	AgentkitSigner,
-	AgentkitSignerType,
-	CreateAgentkitClientOptions,
-} from './client'
+export type { AgentkitClient, AgentkitFetchEvent, AgentkitSigner, CreateAgentkitClientOptions } from './client'
 
 // Storage
 export { InMemoryAgentKitStorage, type AgentKitStorage } from './storage'
