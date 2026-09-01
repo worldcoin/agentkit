@@ -1,7 +1,11 @@
 import type { PaymentRequired } from '@x402/core/types'
-import { AGENTKIT, AGENTKIT_HEADER, normalizeAgentkitBody, normalizeAgentkitRequestBody } from './protocol'
+import { createSignatureHeaders, type AgentkitSignatureHeaders } from '@worldcoin/agentkit-core'
+import { AGENTKIT, normalizeAgentkitBody, normalizeAgentkitRequestBody } from './protocol'
 
 export type AgentkitSigner = {
+	/** The agent's address; becomes the signature keyid. */
+	address: string
+	/** EIP-191 signer over the RFC 9421 signature base. */
 	signMessage(message: string): Promise<string>
 }
 
@@ -19,14 +23,20 @@ export interface CreateAgentkitClientOptions {
 
 export interface AgentkitClient {
 	fetch: typeof fetch
-	createHeader(body: unknown): Promise<string>
+	createHeaders(input: { method: string; url: string | URL; body?: unknown }): Promise<AgentkitSignatureHeaders>
 }
 
 export function createAgentkitClient(options: CreateAgentkitClientOptions): AgentkitClient {
 	const fetchFn = options.fetch ?? globalThis.fetch
 
-	const createHeader = async (body: unknown): Promise<string> =>
-		options.signer.signMessage(normalizeAgentkitBody(body))
+	const createHeaders = (input: { method: string; url: string | URL; body?: unknown }) =>
+		createSignatureHeaders({
+			method: input.method,
+			url: input.url,
+			body: normalizeAgentkitBody(input.body),
+			address: options.signer.address,
+			signMessage: message => options.signer.signMessage(message),
+		})
 
 	const agentkitFetch = (async (
 		input: Parameters<typeof fetch>[0],
@@ -42,16 +52,22 @@ export function createAgentkitClient(options: CreateAgentkitClientOptions): Agen
 		const url = request.url
 		options.onEvent?.({ type: 'agentkit_detected', url })
 
-		let header: string
+		let signatureHeaders: AgentkitSignatureHeaders
 		let body: string
 		try {
 			body = await normalizeAgentkitRequestBody(request)
-			header = await createHeader(body)
+			signatureHeaders = await createSignatureHeaders({
+				method: request.method,
+				url: request.url,
+				body,
+				address: options.signer.address,
+				signMessage: message => options.signer.signMessage(message),
+			})
 		} catch (err) {
 			options.onEvent?.({
 				type: 'agentkit_skipped',
 				url,
-				reason: err instanceof Error ? err.message : 'Unable to create AgentKit header',
+				reason: err instanceof Error ? err.message : 'Unable to create AgentKit signature',
 			})
 			return response
 		}
@@ -59,7 +75,7 @@ export function createAgentkitClient(options: CreateAgentkitClientOptions): Agen
 		options.onEvent?.({ type: 'agentkit_signed', url })
 
 		const headers = new Headers(request.headers)
-		headers.set(AGENTKIT_HEADER, header)
+		for (const [name, value] of Object.entries(signatureHeaders)) headers.set(name, value)
 		headers.delete('content-length')
 
 		const retryResponse = await fetchFn(createRetryRequest(request, headers, body))
@@ -70,7 +86,7 @@ export function createAgentkitClient(options: CreateAgentkitClientOptions): Agen
 
 	return {
 		fetch: agentkitFetch,
-		createHeader,
+		createHeaders,
 	}
 }
 

@@ -1,8 +1,13 @@
 import type { AgentkitMode } from './types'
 import type { AgentKitStorage } from './storage'
-import { verify } from '@worldcoin/agentkit-core'
-import { recoverMessageAddress, type Hex } from 'viem'
-import { AGENTKIT_HEADER, normalizeAgentkitBody, normalizeAgentkitJsonBody } from './protocol'
+import { verifyRequest, type VerifiedAgentRequest } from '@worldcoin/agentkit-core'
+import {
+	AGENTKIT_CONTENT_DIGEST_HEADER,
+	AGENTKIT_SIGNATURE_HEADER,
+	AGENTKIT_SIGNATURE_INPUT_HEADER,
+	normalizeAgentkitBody,
+	normalizeAgentkitJsonBody,
+} from './protocol'
 
 export type AgentkitHookEvent =
 	| { type: 'agent_verified'; resource: string; address: string; lookupId: string }
@@ -21,18 +26,14 @@ export function createAgentkitHooks(options: CreateAgentkitHooksOptions) {
 	return createAgentkitHooksInternal(options)
 }
 
-type VerifyFunction = (request: Request) => Promise<string>
-type RecoverAddressFunction = (body: Uint8Array, signature: Hex) => Promise<string>
+type VerifyFunction = (request: Request) => Promise<VerifiedAgentRequest>
 
 export function createAgentkitHooksInternal(
 	options: CreateAgentkitHooksOptions,
-	dependencies: { verify?: VerifyFunction; recoverAddress?: RecoverAddressFunction } = {}
+	dependencies: { verify?: VerifyFunction } = {}
 ) {
 	const { onEvent } = options
-	const verifyRequest = dependencies.verify ?? verify
-	const recoverAddress =
-		dependencies.recoverAddress ??
-		((body: Uint8Array, signature: Hex) => recoverMessageAddress({ message: { raw: body }, signature }))
+	const verify = dependencies.verify ?? verifyRequest
 	const mode: AgentkitMode = options.mode ?? { type: 'free' }
 	const storage = options.storage
 
@@ -58,27 +59,50 @@ export function createAgentkitHooksInternal(
 	const pendingDiscounts = new Map<string, { lookupId: string; address: string; createdAt: number }>()
 
 	const requestHook = async (context: {
-		adapter: { getHeader(name: string): string | undefined; getUrl(): string; getBody?(): unknown }
+		adapter: {
+			getHeader(name: string): string | undefined
+			getMethod(): string
+			getUrl(): string
+			getBody?(): unknown
+		}
 		path: string
 	}): Promise<void | { grantAccess: true }> => {
-		const header = context.adapter.getHeader(AGENTKIT_HEADER)
-		if (!header) return
+		const signatureInput = context.adapter.getHeader(AGENTKIT_SIGNATURE_INPUT_HEADER)
+		if (!signatureInput) return
 
 		try {
-			const parsedBody = await context.adapter.getBody?.()
-			const contentType = context.adapter.getHeader('content-type')?.split(';', 1)[0]?.trim().toLowerCase()
-			const body =
-				contentType === 'application/json' || contentType?.endsWith('+json')
-					? normalizeAgentkitJsonBody(parsedBody)
-					: normalizeAgentkitBody(parsedBody)
-			const bodyBytes = new TextEncoder().encode(body)
+			// Clients sign the empty body for bodyless requests regardless of content type,
+			// so determine the method first and skip body normalization for GET/HEAD.
+			const method = context.adapter.getMethod().toUpperCase()
+			const isBodyless = method === 'GET' || method === 'HEAD'
+
+			let body = ''
+			if (!isBodyless) {
+				const parsedBody = await context.adapter.getBody?.()
+				const contentType = context.adapter.getHeader('content-type')?.split(';', 1)[0]?.trim().toLowerCase()
+				if (parsedBody !== undefined) {
+					body =
+						contentType === 'application/json' || contentType?.endsWith('+json')
+							? normalizeAgentkitJsonBody(parsedBody)
+							: normalizeAgentkitBody(parsedBody)
+				}
+			}
+
+			// Rebuild the request core verifies against from what actually arrived: the real
+			// method and URL, the signature headers, and the re-normalized body bytes.
+			const headers = new Headers({ [AGENTKIT_SIGNATURE_INPUT_HEADER]: signatureInput })
+			const signatureHeader = context.adapter.getHeader(AGENTKIT_SIGNATURE_HEADER)
+			if (signatureHeader) headers.set(AGENTKIT_SIGNATURE_HEADER, signatureHeader)
+			const contentDigest = context.adapter.getHeader(AGENTKIT_CONTENT_DIGEST_HEADER)
+			if (contentDigest) headers.set(AGENTKIT_CONTENT_DIGEST_HEADER, contentDigest)
+
 			const verificationRequest = new Request(context.adapter.getUrl(), {
-				method: 'POST',
-				headers: { [AGENTKIT_HEADER]: header },
-				body,
+				method,
+				headers,
+				// GET/HEAD requests cannot carry a body; core digests the empty byte string.
+				...(isBodyless ? {} : { body }),
 			})
-			const lookupId = await verifyRequest(verificationRequest)
-			const address = await recoverAddress(bodyBytes, header as Hex)
+			const { lookupId, address } = await verify(verificationRequest)
 
 			if (mode.type === 'free') {
 				onEvent?.({ type: 'agent_verified', resource: context.path, address, lookupId })
@@ -106,7 +130,7 @@ export function createAgentkitHooksInternal(
 				for (const [key, entry] of pendingDiscounts) {
 					if (now - entry.createdAt > PENDING_TTL_MS) pendingDiscounts.delete(key)
 				}
-				pendingDiscounts.set(`${context.path}:${address}`, {
+				pendingDiscounts.set(`${context.path}:${address.toLowerCase()}`, {
 					lookupId,
 					address,
 					createdAt: now,
@@ -137,7 +161,9 @@ export function createAgentkitHooksInternal(
 				}): Promise<void | { recovered: true; result: { isValid: boolean; payer?: string } }> => {
 					const resourcePath = new URL(context.paymentPayload.resource.url).pathname
 					const payer = extractPayer(context.paymentPayload.payload)
-					const discountKey = payer ? `${resourcePath}:${payer}` : null
+					// Addresses compare case-insensitively: the stored key uses the lowercase
+					// signer address, payment payloads usually carry EIP-55 checksummed ones.
+					const discountKey = payer ? `${resourcePath}:${payer.toLowerCase()}` : null
 					const pending = discountKey ? pendingDiscounts.get(discountKey) : undefined
 					if (discountKey) pendingDiscounts.delete(discountKey)
 

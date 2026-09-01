@@ -22,9 +22,10 @@
   "scripts": {
     "build": "tsc",
     "cli": "tsx src/index.ts",
-    "test": "bun test"
+    "test": "bun run --cwd ../core build && bun test"
   },
   "dependencies": {
+    "@worldcoin/agentkit-core": "^0.2.1",
     "@worldcoin/idkit-core": "2.1.0",
     "ajv": "^8.18.0",
     "incur": "^0.2.2",

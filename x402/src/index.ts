@@ -1,5 +1,12 @@
 // x402 protocol
-export { AGENTKIT, AGENTKIT_HEADER, normalizeAgentkitBody, normalizeAgentkitRequestBody } from './protocol'
+export {
+	AGENTKIT,
+	AGENTKIT_CONTENT_DIGEST_HEADER,
+	AGENTKIT_SIGNATURE_HEADER,
+	AGENTKIT_SIGNATURE_INPUT_HEADER,
+	normalizeAgentkitBody,
+	normalizeAgentkitRequestBody,
+} from './protocol'
 export type { AgentkitExtension } from './protocol'
 
 // x402-specific types

@@ -1,7 +1,9 @@
 import type { AgentkitMode } from './types'
 
 export const AGENTKIT = 'agentkit'
-export const AGENTKIT_HEADER = 'AgentKit'
+export const AGENTKIT_SIGNATURE_INPUT_HEADER = 'Signature-Input'
+export const AGENTKIT_SIGNATURE_HEADER = 'Signature'
+export const AGENTKIT_CONTENT_DIGEST_HEADER = 'Content-Digest'
 
 export interface AgentkitExtension {
 	mode?: AgentkitMode

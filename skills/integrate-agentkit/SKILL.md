@@ -1,6 +1,6 @@
 ---
 name: integrate-agentkit
-description: Protect one HTTP endpoint with @worldcoin/agentkit-core. Use this skill when an application must validate AgentKit body signatures, identify a registered agent, or add AgentKit authentication to an API route.
+description: Protect one HTTP endpoint with @worldcoin/agentkit-core. Use this skill when an application must validate AgentKit RFC 9421 request signatures, identify a registered agent, or add AgentKit authentication to an API route.
 ---
 
 # Integrate AgentKit
@@ -68,13 +68,17 @@ Use a stable machine code such as `AGENTKIT_VALIDATION_FAILED`.
 
 Do not return the internal verification error. The internal error can contain an address or a network detail. If the application has a server logger, record the internal error there.
 
-## Preserve the signed body
+## Preserve the signed request
 
-Pass the original request to `verify`. Do not parse, format, or rebuild the body first.
+Pass the original request to `verify`. Do not parse, format, or rebuild the body first, and do not rewrite the method, path, query string, or host — the signature binds all of them.
 
-If the framework does not use Web `Request`, capture the exact body before a body parser changes it. Build one Web `Request` with those exact bytes and the original `AgentKit` header.
+If the framework does not use Web `Request`, capture the exact body before a body parser changes it. Build one Web `Request` with the original method and full URL, those exact body bytes, and the original `Signature-Input`, `Signature`, and `Content-Digest` headers.
+
+Behind a proxy, the URL that `verify` sees must reflect the public host the client signed. Make sure the framework applies `X-Forwarded-Host` (or equivalent) first.
 
 Do not use a parsed JSON object as a replacement for the original body bytes.
+
+A byte-identical request can be replayed until its signature expires (at most five minutes). Nonce-based single-use signatures are a planned follow-up. Until then, if duplicate execution would be harmful for the endpoint, keep it idempotent or deduplicate at the application level (e.g. on a request ID inside the signed body).
 
 ## Keep the change local
 
@@ -88,13 +92,15 @@ Do not use a parsed JSON object as a replacement for the original body bytes.
 
 Test these cases:
 
-1. A request without `AgentKit` returns status `401` and the required message.
+1. A request without the `Signature-Input`, `Signature`, and `Content-Digest` headers returns status `401` and the required message.
 2. A malformed signature returns the same safe error.
 3. An unregistered signer returns the same safe error.
 4. A registered signer can use the endpoint.
 5. A changed body invalidates the signature.
-6. The endpoint can read the body after `verify` succeeds.
-7. An endpoint outside the selected route stays unchanged.
+6. A signature created for a different method, URL, or query string is rejected.
+7. An expired signature (older than five minutes) is rejected.
+8. The endpoint can read the body after `verify` succeeds.
+9. An endpoint outside the selected route stays unchanged.
 
 Run the normal formatter, type checker, and relevant tests for the application.
 

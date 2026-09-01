@@ -28,16 +28,18 @@ Full registration guide: [REGISTRATION.md](./REGISTRATION.md)
 
 ## Sign a request as this agent
 
-Pass the exact UTF-8 request body to `prove`:
+Pass the HTTP method, the full URL, and the exact UTF-8 request body to `prove`:
 
 ```bash
-agentkit prove '{"query":"weather","city":"Lisbon"}'
+agentkit prove POST 'https://api.example.com/data' '{"query":"weather","city":"Lisbon"}'
 ```
 
-For a request with no body, pass an empty string:
+For a request with no body, omit the last argument:
 
 ```bash
-agentkit prove ''
+agentkit prove GET 'https://api.example.com/data'
 ```
 
-The command requires the key created by `agentkit register` and confirms that its address is registered before signing. It returns a `signature` field containing the hexadecimal value for the `AgentKit` request header. The retried request body must exactly match the body passed to `prove`.
+The command requires the key created by `agentkit register` and confirms that its address is registered before signing. It returns a `headers` object with three values — `Content-Digest`, `Signature-Input`, and `Signature` (RFC 9421 HTTP message signatures) — to copy onto the request unmodified.
+
+The signature is bound to the method, host, path, query string, and body, and expires after five minutes. Send the request with the exact same method, URL, and byte-identical body, and run `prove` again for each new request.
