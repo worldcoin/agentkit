@@ -45,7 +45,7 @@ For most production integrations:
     - `createAgentBookVerifier`
 4. If the payment network is World Chain (`eip155:480`), add a custom `ExactEvmScheme().registerMoneyParser(...)` for World Chain USDC. Do not assume the server scheme has a working default stablecoin for World Chain.
 5. Call `createAgentBookVerifier()` with no arguments in the common case. Pass `rpcUrl` or `contractAddress` only for custom World Chain endpoints or non-canonical deployments.
-6. If the mode is `free-trial` or `discount`, add persistent `AgentKitStorage`. `InMemoryAgentKitStorage` is only for demos.
+6. If the mode is `free-trial` or `discount`, add persistent `AgentKitStorage`. `InMemoryAgentKitStorage` is only for demos. Implement `consumeNonce` as an atomic check-and-insert with expiry; separate nonce reads and writes are not concurrency-safe.
 7. If the mode is `discount`, wire `hooks.verifyFailureHook` into the facilitator. Without it, discounted underpayments will fail verification.
 8. Verify the whole path end-to-end:
     - 402 response includes the `agentkit` extension
