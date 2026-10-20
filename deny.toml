@@ -41,4 +41,7 @@ ignore = [
   "RUSTSEC-2026-0247", # Unmaintained `bitmaps`, dep of `im` (same provekit tree) (2026-08-24)
   "RUSTSEC-2026-0248", # Unmaintained `im`, via provekit's Noir compiler fork under walletkit-core (2026-08-24)
   "RUSTSEC-2026-0251", # Unmaintained `sized-chunks`, dep of `im` (same provekit tree) (2026-08-24)
+  "RUSTSEC-2026-0381", # only hit is the webpki-roots 0.26.11 shim, which re-exports webpki-roots 1.x (locked at 1.0.10)
+  "RUSTSEC-2026-0383", # only hit is the webpki-root-certs 0.26.11 shim, which re-exports webpki-root-certs 1.x (locked at 1.0.10)
+  "RUSTSEC-2026-0374", # basic-toml is unmaintained; build-time transitive dep with no maintained replacement upstream
 ]
