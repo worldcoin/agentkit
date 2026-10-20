@@ -1,3 +1,6 @@
+> [!WARNING]
+> This repository is deprecated.
+
 <div align="center">
 
 # **AgentKit**
