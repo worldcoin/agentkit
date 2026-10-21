@@ -4,11 +4,5 @@ export type AgentkitMode =
 	| { type: 'discount'; percent: number; uses?: number }
 
 export interface DeclareAgentkitOptions {
-	domain?: string
-	resourceUri?: string
-	statement?: string
-	version?: string
-	network?: string | string[]
-	expirationSeconds?: number
 	mode?: AgentkitMode
 }

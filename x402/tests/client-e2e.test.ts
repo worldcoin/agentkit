@@ -1,29 +1,20 @@
 import { describe, expect, it } from 'bun:test'
-import { AGENTKIT, buildAgentkitSchema } from '@worldcoin/agentkit-core'
+import { createSignatureHeaders } from '../../core/src/signature'
+import { verifyRequest } from '../../core/src/verify'
+import { createAgentkitHooksInternal } from '../src/hooks'
+import { createAgentkitClient, type AgentKitStorage } from '../src'
 import { generatePrivateKey, privateKeyToAccount } from 'viem/accounts'
-import { createAgentkitClient, createAgentkitHooks, type AgentKitStorage } from '../src'
-import type { AgentkitExtension } from '@worldcoin/agentkit-core'
+import {
+	AGENTKIT,
+	AGENTKIT_CONTENT_DIGEST_HEADER,
+	AGENTKIT_SIGNATURE_HEADER,
+	AGENTKIT_SIGNATURE_INPUT_HEADER,
+} from '../src/protocol'
 
 const CHAIN_ID = 'eip155:8453'
 const PROTECTED_URL = 'https://agentkit.example/protected'
 
-function createExtension(url: string): AgentkitExtension {
-	return {
-		info: {
-			domain: new URL(url).hostname,
-			uri: url,
-			version: '1',
-			nonce: 'nonce1234',
-			issuedAt: new Date().toISOString(),
-			statement: 'Verify your agent is backed by a real human',
-			resources: [url],
-		},
-		supportedChains: [{ chainId: CHAIN_ID, type: 'eip191' }],
-		schema: buildAgentkitSchema(),
-	}
-}
-
-function paymentRequired(extension: AgentkitExtension) {
+function paymentRequired() {
 	return {
 		x402Version: 2,
 		resource: {
@@ -42,80 +33,90 @@ function paymentRequired(extension: AgentkitExtension) {
 				extra: {},
 			},
 		],
-		extensions: { [AGENTKIT]: extension },
+		extensions: { [AGENTKIT]: { mode: { type: 'free-trial', uses: 3 } } },
 	}
 }
 
-function createAdapter(request: Request) {
+function createAdapter(request: Request, body: unknown) {
 	return {
 		getHeader(name: string) {
+			if (name.toLowerCase() === 'content-type') return request.headers.get('content-type') ?? undefined
 			return request.headers.get(name) ?? undefined
+		},
+		getMethod() {
+			return request.method
 		},
 		getUrl() {
 			return request.url
+		},
+		getBody() {
+			return body
 		},
 	}
 }
 
 describe('AgentKit client/server E2E', () => {
-	it('uses the client SDK to satisfy an AgentKit-enabled 402 before payment fallback', async () => {
+	it('signs the request and satisfies an AgentKit-enabled 402 before payment', async () => {
 		const account = privateKeyToAccount(generatePrivateKey())
 		const clientEvents: Array<Record<string, unknown>> = []
 		const serverEvents: Array<Record<string, string>> = []
 		const lookups: string[] = []
-		const usageCalls: Array<{ endpoint: string; humanId: string; limit: number }> = []
+		const usageCalls: Array<{ endpoint: string; lookupId: string; limit: number }> = []
 		let requestCount = 0
 
 		const storage: AgentKitStorage = {
-			async tryIncrementUsage(endpoint, humanId, limit) {
-				usageCalls.push({ endpoint, humanId, limit })
+			async tryIncrementUsage(endpoint, lookupId, limit) {
+				usageCalls.push({ endpoint, lookupId, limit })
 				return true
 			},
 		}
-		const hooks = createAgentkitHooks({
-			agentBook: {
-				async lookupHuman(address) {
-					lookups.push(address)
-					return address.toLowerCase() === account.address.toLowerCase() ? 'human-1' : null
-				},
+		const hooks = createAgentkitHooksInternal(
+			{
+				mode: { type: 'free-trial', uses: 3 },
+				storage,
+				onEvent: event => serverEvents.push(event as Record<string, string>),
 			},
-			mode: { type: 'free-trial', uses: 3 },
-			storage,
-			onEvent: event => serverEvents.push(event as Record<string, string>),
-		})
+			{
+				verify: request =>
+					verifyRequest(request, {
+						async lookupId(address) {
+							lookups.push(address)
+							return address === account.address ? 'human-1' : null
+						},
+					}),
+			}
+		)
 
 		const fetch = async (input: RequestInfo | URL, init?: RequestInit) => {
 			requestCount += 1
 			const request = new Request(input, init)
 			const path = new URL(request.url).pathname
-			const grant = await hooks.requestHook({ adapter: createAdapter(request), path })
+			const text = await request.clone().text()
+			const body = text === '' ? undefined : JSON.parse(text)
+			const grant = await hooks.requestHook({ adapter: createAdapter(request, body), path })
 
-			if (grant?.grantAccess) {
-				return Response.json({ ok: true })
-			}
-
-			return Response.json(paymentRequired(createExtension(request.url)), { status: 402 })
+			if (grant?.grantAccess) return Response.json({ ok: true })
+			return Response.json(paymentRequired(), { status: 402 })
 		}
 
 		const agentkit = createAgentkitClient({
-			signer: {
-				address: account.address,
-				chainId: CHAIN_ID,
-				type: 'eip191',
-				signMessage: message => account.signMessage({ message }),
-			},
+			signer: { address: account.address, signMessage: message => account.signMessage({ message }) },
 			fetch,
 			onEvent: event => clientEvents.push(event),
 		})
 
-		const response = await agentkit.fetch(PROTECTED_URL)
+		const response = await agentkit.fetch(PROTECTED_URL, {
+			method: 'POST',
+			headers: { 'Content-Type': 'application/json' },
+			body: '{\n  "hello": "world"\n}',
+		})
 		const body = await response.json()
 
 		expect(response.status).toBe(200)
 		expect(body).toEqual({ ok: true })
 		expect(requestCount).toBe(2)
 		expect(lookups).toEqual([account.address])
-		expect(usageCalls).toEqual([{ endpoint: '/protected', humanId: 'human-1', limit: 3 }])
+		expect(usageCalls).toEqual([{ endpoint: '/protected', lookupId: 'human-1', limit: 3 }])
 		expect(clientEvents.map(event => event.type)).toEqual([
 			'agentkit_detected',
 			'agentkit_signed',
@@ -126,8 +127,61 @@ describe('AgentKit client/server E2E', () => {
 				type: 'agent_verified',
 				resource: '/protected',
 				address: account.address,
-				humanId: 'human-1',
+				lookupId: 'human-1',
 			},
 		])
+	})
+
+	it('rejects a tampered body under the same signature', async () => {
+		const account = privateKeyToAccount(generatePrivateKey())
+		const events: Array<Record<string, string>> = []
+		const hooks = createAgentkitHooksInternal(
+			{ onEvent: event => events.push(event as Record<string, string>) },
+			{ verify: request => verifyRequest(request, { lookupId: async () => 'human-1' }) }
+		)
+
+		const headers = await createSignatureHeaders({
+			method: 'POST',
+			url: PROTECTED_URL,
+			body: '{"hello":"world"}',
+			address: account.address,
+			signMessage: message => account.signMessage({ message }),
+		})
+
+		const adapter = (body: unknown) => ({
+			getHeader(name: string) {
+				const lower = name.toLowerCase()
+				if (lower === 'content-type') return 'application/json'
+				if (lower === 'signature-input') return headers['Signature-Input']
+				if (lower === 'signature') return headers.Signature
+				if (lower === 'content-digest') return headers['Content-Digest']
+				return undefined
+			},
+			getMethod: () => 'POST',
+			getUrl: () => PROTECTED_URL,
+			getBody: () => body,
+		})
+
+		await expect(hooks.requestHook({ adapter: adapter({ hello: 'world' }), path: '/protected' })).resolves.toEqual({
+			grantAccess: true,
+		})
+		// Until nonce-based single-use lands, a byte-identical replay inside the
+		// five-minute window verifies again by design.
+		await expect(hooks.requestHook({ adapter: adapter({ hello: 'world' }), path: '/protected' })).resolves.toEqual({
+			grantAccess: true,
+		})
+		await expect(
+			hooks.requestHook({ adapter: adapter({ hello: 'tampered' }), path: '/protected' })
+		).resolves.toBeUndefined()
+
+		expect(events.map(event => event.type)).toEqual(['agent_verified', 'agent_verified', 'validation_failed'])
+		expect(events[2]!.error).toBe('Content-Digest does not match the request body')
+	})
+
+	it('uses standard signature header names distinct from the extension key', () => {
+		expect(AGENTKIT).toBe('agentkit')
+		expect(AGENTKIT_SIGNATURE_INPUT_HEADER).toBe('Signature-Input')
+		expect(AGENTKIT_SIGNATURE_HEADER).toBe('Signature')
+		expect(AGENTKIT_CONTENT_DIGEST_HEADER).toBe('Content-Digest')
 	})
 })

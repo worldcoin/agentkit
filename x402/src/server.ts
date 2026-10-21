@@ -1,73 +1,20 @@
-import { AGENTKIT, buildAgentkitSchema } from '@worldcoin/agentkit-core'
-import { randomBytes } from 'crypto'
-import { getSignatureTypes, type AgentkitDeclaration } from './declare'
-import type { ResourceServerExtension, PaymentRequiredContext } from '@x402/core/types'
-import type {
-	AgentkitExtension,
-	AgentkitExtensionInfo,
-	SupportedChain,
-} from '@worldcoin/agentkit-core'
+import { AGENTKIT } from './protocol'
+import type { AgentkitExtension } from './protocol'
+import type { AgentkitDeclaration } from './declare'
 import type { DeclareAgentkitOptions } from './types'
+import type { ResourceServerExtension, PaymentRequiredContext } from '@x402/core/types'
 
 export const agentkitResourceServerExtension: ResourceServerExtension = {
 	key: AGENTKIT,
 
-	enrichPaymentRequiredResponse: async (declaration: unknown, context: PaymentRequiredContext): Promise<AgentkitExtension> => {
+	enrichPaymentRequiredResponse: async (
+		declaration: unknown,
+		_context: PaymentRequiredContext
+	): Promise<AgentkitExtension> => {
 		const decl = declaration as AgentkitDeclaration
 		const opts: DeclareAgentkitOptions = decl._options ?? {}
 
-		const resourceUri = opts.resourceUri ?? context.resourceInfo.url
-
-		let domain = opts.domain
-		if (!domain && resourceUri) {
-			try {
-				domain = new URL(resourceUri).hostname
-			} catch {
-				// leave domain undefined
-			}
-		}
-
-		let networks: string[]
-		if (opts.network) {
-			networks = Array.isArray(opts.network) ? opts.network : [opts.network]
-		} else {
-			networks = [...new Set(context.requirements.map(r => r.network))]
-		}
-
-		const nonce = randomBytes(16).toString('hex')
-		const issuedAt = new Date().toISOString()
-
-		const expirationSeconds = opts.expirationSeconds
-		const expirationTime =
-			expirationSeconds !== undefined ? new Date(Date.now() + expirationSeconds * 1000).toISOString() : undefined
-
-		const info: AgentkitExtensionInfo = {
-			domain: domain ?? '',
-			uri: resourceUri,
-			version: opts.version ?? '1',
-			nonce,
-			issuedAt,
-			resources: [resourceUri],
-		}
-
-		if (expirationTime) {
-			info.expirationTime = expirationTime
-		}
-		if (opts.statement) {
-			info.statement = opts.statement
-		}
-
-		const supportedChains: SupportedChain[] = networks.flatMap(network =>
-			getSignatureTypes(network).map(type => ({
-				chainId: network,
-				type,
-			}))
-		)
-
 		return {
-			info,
-			supportedChains,
-			schema: buildAgentkitSchema(),
 			...(opts.mode ? { mode: opts.mode } : {}),
 		}
 	},

@@ -1,33 +1,39 @@
 import type { AgentkitMode } from './types'
 import type { AgentKitStorage } from './storage'
-import type { AgentBookVerifier, AgentkitSignatureVerificationOptions } from '@worldcoin/agentkit-core'
+import { verifyRequest, type VerifiedAgentRequest } from '@worldcoin/agentkit-core'
 import {
-	AGENTKIT,
-	parseAgentkitHeader,
-	verifyAgentkitSignature,
-	validateAgentkitMessage,
-} from '@worldcoin/agentkit-core'
+	AGENTKIT_CONTENT_DIGEST_HEADER,
+	AGENTKIT_SIGNATURE_HEADER,
+	AGENTKIT_SIGNATURE_INPUT_HEADER,
+	normalizeAgentkitBody,
+	normalizeAgentkitJsonBody,
+} from './protocol'
 
 export type AgentkitHookEvent =
-	| { type: 'agent_verified'; resource: string; address: string; humanId: string }
+	| { type: 'agent_verified'; resource: string; address: string; lookupId: string }
 	| { type: 'agent_not_verified'; resource: string; address: string }
 	| { type: 'validation_failed'; resource: string; error?: string }
-	| { type: 'discount_applied'; resource: string; address: string; humanId: string }
-	| { type: 'discount_exhausted'; resource: string; address: string; humanId: string }
+	| { type: 'discount_applied'; resource: string; address: string; lookupId: string }
+	| { type: 'discount_exhausted'; resource: string; address: string; lookupId: string }
 
 export interface CreateAgentkitHooksOptions {
-	agentBook: AgentBookVerifier
 	mode?: AgentkitMode
 	storage?: AgentKitStorage
-	/** Fallback custom RPC URL for EVM signature verification. Uses the signed chain's default public RPC if omitted. */
-	rpcUrl?: string
-	/** Custom EVM signature-verification RPC URLs keyed by CAIP-2 chain ID. */
-	rpcUrls?: Record<string, string>
 	onEvent?: (event: AgentkitHookEvent) => void
 }
 
 export function createAgentkitHooks(options: CreateAgentkitHooksOptions) {
-	const { agentBook, onEvent } = options
+	return createAgentkitHooksInternal(options)
+}
+
+type VerifyFunction = (request: Request) => Promise<VerifiedAgentRequest>
+
+export function createAgentkitHooksInternal(
+	options: CreateAgentkitHooksOptions,
+	dependencies: { verify?: VerifyFunction } = {}
+) {
+	const { onEvent } = options
+	const verify = dependencies.verify ?? verifyRequest
 	const mode: AgentkitMode = options.mode ?? { type: 'free' }
 	const storage = options.storage
 
@@ -50,62 +56,67 @@ export function createAgentkitHooks(options: CreateAgentkitHooksOptions) {
 	// Shared state for discount mode: requestHook stores verified agent info
 	// for verifyFailureHook to use (it doesn't have HTTP header access).
 	const PENDING_TTL_MS = 5 * 60 * 1000
-	const pendingDiscounts = new Map<string, { humanId: string; address: string; createdAt: number }>()
+	const pendingDiscounts = new Map<string, { lookupId: string; address: string; createdAt: number }>()
 
 	const requestHook = async (context: {
-		adapter: { getHeader(name: string): string | undefined; getUrl(): string }
+		adapter: {
+			getHeader(name: string): string | undefined
+			getMethod(): string
+			getUrl(): string
+			getBody?(): unknown
+		}
 		path: string
 	}): Promise<void | { grantAccess: true }> => {
-		const header = context.adapter.getHeader(AGENTKIT) || context.adapter.getHeader(AGENTKIT.toLowerCase())
-		if (!header) return
+		const signatureInput = context.adapter.getHeader(AGENTKIT_SIGNATURE_INPUT_HEADER)
+		if (!signatureInput) return
 
 		try {
-			const payload = parseAgentkitHeader(header)
-			const resourceUri = context.adapter.getUrl()
+			// Clients sign the empty body for bodyless requests regardless of content type,
+			// so determine the method first and skip body normalization for GET/HEAD.
+			const method = context.adapter.getMethod().toUpperCase()
+			const isBodyless = method === 'GET' || method === 'HEAD'
 
-			const checkNonce = storage?.hasUsedNonce
-				? async (nonce: string) => !(await storage.hasUsedNonce!(nonce))
-				: undefined
-
-			const validation = await validateAgentkitMessage(payload, resourceUri, { checkNonce })
-			if (!validation.valid) {
-				onEvent?.({ type: 'validation_failed', resource: context.path, error: validation.error })
-				return
+			let body = ''
+			if (!isBodyless) {
+				const parsedBody = await context.adapter.getBody?.()
+				const contentType = context.adapter.getHeader('content-type')?.split(';', 1)[0]?.trim().toLowerCase()
+				if (parsedBody !== undefined) {
+					body =
+						contentType === 'application/json' || contentType?.endsWith('+json')
+							? normalizeAgentkitJsonBody(parsedBody)
+							: normalizeAgentkitBody(parsedBody)
+				}
 			}
 
-			const verificationOptions: AgentkitSignatureVerificationOptions = {
-				rpcUrl: options.rpcUrl,
-				rpcUrls: options.rpcUrls,
-			}
-			const verification = await verifyAgentkitSignature(payload, verificationOptions)
-			if (!verification.valid || !verification.address) {
-				onEvent?.({ type: 'validation_failed', resource: context.path, error: verification.error })
-				return
-			}
+			// Rebuild the request core verifies against from what actually arrived: the real
+			// method and URL, the signature headers, and the re-normalized body bytes.
+			const headers = new Headers({ [AGENTKIT_SIGNATURE_INPUT_HEADER]: signatureInput })
+			const signatureHeader = context.adapter.getHeader(AGENTKIT_SIGNATURE_HEADER)
+			if (signatureHeader) headers.set(AGENTKIT_SIGNATURE_HEADER, signatureHeader)
+			const contentDigest = context.adapter.getHeader(AGENTKIT_CONTENT_DIGEST_HEADER)
+			if (contentDigest) headers.set(AGENTKIT_CONTENT_DIGEST_HEADER, contentDigest)
 
-			if (storage?.recordNonce) {
-				await storage.recordNonce(payload.nonce)
-			}
-
-			const humanId = await agentBook.lookupHuman(verification.address)
-			if (!humanId) {
-				onEvent?.({ type: 'agent_not_verified', resource: context.path, address: verification.address })
-				return
-			}
+			const verificationRequest = new Request(context.adapter.getUrl(), {
+				method,
+				headers,
+				// GET/HEAD requests cannot carry a body; core digests the empty byte string.
+				...(isBodyless ? {} : { body }),
+			})
+			const { lookupId, address } = await verify(verificationRequest)
 
 			if (mode.type === 'free') {
-				onEvent?.({ type: 'agent_verified', resource: context.path, address: verification.address, humanId })
+				onEvent?.({ type: 'agent_verified', resource: context.path, address, lookupId })
 				return { grantAccess: true }
 			}
 
 			if (mode.type === 'free-trial') {
 				const uses = mode.uses ?? 1
-				if (await storage!.tryIncrementUsage(context.path, humanId, uses)) {
+				if (await storage!.tryIncrementUsage(context.path, lookupId, uses)) {
 					onEvent?.({
 						type: 'agent_verified',
 						resource: context.path,
-						address: verification.address,
-						humanId,
+						address,
+						lookupId,
 					})
 					return { grantAccess: true }
 				}
@@ -119,15 +130,20 @@ export function createAgentkitHooks(options: CreateAgentkitHooksOptions) {
 				for (const [key, entry] of pendingDiscounts) {
 					if (now - entry.createdAt > PENDING_TTL_MS) pendingDiscounts.delete(key)
 				}
-				pendingDiscounts.set(`${context.path}:${verification.address}`, {
-					humanId,
-					address: verification.address,
+				pendingDiscounts.set(`${context.path}:${address.toLowerCase()}`, {
+					lookupId,
+					address,
 					createdAt: now,
 				})
 				// Don't grant access — agent is expected to pay (at a discount)
 				return
 			}
 		} catch (err) {
+			const failure = err as { code?: unknown; address?: unknown }
+			if (failure?.code === 'AGENT_NOT_REGISTERED' && typeof failure.address === 'string') {
+				onEvent?.({ type: 'agent_not_verified', resource: context.path, address: failure.address })
+				return
+			}
 			onEvent?.({
 				type: 'validation_failed',
 				resource: context.path,
@@ -145,14 +161,16 @@ export function createAgentkitHooks(options: CreateAgentkitHooksOptions) {
 				}): Promise<void | { recovered: true; result: { isValid: boolean; payer?: string } }> => {
 					const resourcePath = new URL(context.paymentPayload.resource.url).pathname
 					const payer = extractPayer(context.paymentPayload.payload)
-					const discountKey = payer ? `${resourcePath}:${payer}` : null
+					// Addresses compare case-insensitively: the stored key uses the lowercase
+					// signer address, payment payloads usually carry EIP-55 checksummed ones.
+					const discountKey = payer ? `${resourcePath}:${payer.toLowerCase()}` : null
 					const pending = discountKey ? pendingDiscounts.get(discountKey) : undefined
 					if (discountKey) pendingDiscounts.delete(discountKey)
 
 					if (!pending) return
 					if (!isUnderpaymentError(context.error)) return
 
-					const { humanId, address } = pending
+					const { lookupId, address } = pending
 
 					const requiredAmount = BigInt(context.requirements.amount)
 					const discountedAmount = (requiredAmount * BigInt(100 - mode.percent)) / 100n
@@ -163,11 +181,11 @@ export function createAgentkitHooks(options: CreateAgentkitHooksOptions) {
 					if (paidAmount >= requiredAmount) return
 
 					const uses = mode.uses ?? Infinity
-					if (!(await storage!.tryIncrementUsage(resourcePath, humanId, uses))) {
-						onEvent?.({ type: 'discount_exhausted', resource: resourcePath, address, humanId })
+					if (!(await storage!.tryIncrementUsage(resourcePath, lookupId, uses))) {
+						onEvent?.({ type: 'discount_exhausted', resource: resourcePath, address, lookupId })
 						return
 					}
-					onEvent?.({ type: 'discount_applied', resource: resourcePath, address, humanId })
+					onEvent?.({ type: 'discount_applied', resource: resourcePath, address, lookupId })
 
 					// Adjust requirements so settlement verifies against the discounted amount
 					context.requirements.amount = String(paidAmount)
@@ -196,7 +214,11 @@ function extractPayer(payload: Record<string, unknown>): string | null {
 	}
 }
 
-const UNDERPAYMENT_REASONS = ['invalid_exact_evm_payload_authorization_value', 'permit2_insufficient_amount', 'insufficient_funds']
+const UNDERPAYMENT_REASONS = [
+	'invalid_exact_evm_payload_authorization_value',
+	'permit2_insufficient_amount',
+	'insufficient_funds',
+]
 
 function isUnderpaymentError(error: Error): boolean {
 	const reason = error.message.split(':')[0]

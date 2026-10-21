@@ -30,10 +30,10 @@ contract AgentBook is IAgentBook, Ownable2Step {
     ///                                  EVENTS                                ///
     //////////////////////////////////////////////////////////////////////////////
 
-    /// @notice Emitted when an agent is registered under a human identifier.
+    /// @notice Emitted when an agent is registered with a lookup ID.
     /// @param agent The agent's wallet address
-    /// @param humanId The anonymous human identifier (nullifier hash)
-    event AgentRegistered(address indexed agent, uint256 indexed humanId);
+    /// @param lookupId The lookup ID
+    event AgentRegistered(address indexed agent, uint256 indexed lookupId);
 
     /// @notice Emitted when the contract is initialized
     /// @param worldIdRouter The WorldID router that will manage groups and verify proofs
@@ -62,7 +62,7 @@ contract AgentBook is IAgentBook, Ownable2Step {
     /// @dev The World ID nullifier hash that will be used to verify proofs.
     uint256 immutable EXTERNAL_NULLIFIER_HASH;
 
-    /// @notice Look up the anonymous human identifier for a registered agent.
+    /// @notice Look up the ID for a registered agent.
     mapping(address => uint256) public lookupHuman;
 
     /// @notice The next expected nonce for a given agent address.

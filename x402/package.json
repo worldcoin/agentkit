@@ -29,11 +29,13 @@
 		"access": "public"
 	},
 	"scripts": {
-		"build": "tsup"
+		"build": "tsup",
+		"test": "bun run --cwd ../core build && bun test"
 	},
 	"dependencies": {
 		"@worldcoin/agentkit-core": "^0.2.1",
-		"@x402/core": "^2.4.0"
+		"@x402/core": "^2.4.0",
+		"viem": "^2.55.19"
 	},
 	"devDependencies": {
 		"@types/node": "^25.5.0",

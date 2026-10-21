@@ -1,78 +1,111 @@
 ---
 name: integrate-agentkit
-description: Use this skill when integrating @worldcoin/agentkit into an x402 server or facilitator flow: choose free/free-trial/discount mode, wire payments on any supported EVM chain, handle ExactEvmScheme money parsing, or finish an integration end-to-end.
+description: Protect one HTTP endpoint with @worldcoin/agentkit-core. Use this skill when an application must validate AgentKit RFC 9421 request signatures, identify a registered agent, or add AgentKit authentication to an API route.
 ---
 
 # Integrate AgentKit
 
-Use this skill for end-to-end server-side integration work with `@worldcoin/agentkit`.
+Protect one HTTP endpoint with AgentKit. Use `@worldcoin/agentkit-core`.
 
-## Start by clarifying the integration
+## Select the endpoint
 
-If the developer has not already answered these, ask before choosing an implementation:
+1. Use the endpoint that the user specifies.
+2. If the user does not specify an endpoint, inspect the application routes.
+3. Select one endpoint that handles the protected action or data.
+4. Tell the user which endpoint you selected.
 
-1. Which access mode do they want: `free`, `free-trial`, or `discount`?
-2. Which payment network should the protected route use?
-3. Do they control the facilitator path, or are they using a hosted facilitator?
-4. Do they also need agent registration, or only request-time verification?
+Do not protect all endpoints unless the user requests this change.
 
-## Default recommendation
+Prefer an endpoint that receives a Web `Request`. AgentKit must read the original body bytes.
 
-For most production integrations:
+## Add verification
 
-- Put paid routes on whichever network the developer's facilitator already supports (commonly World Chain `eip155:480` or Base `eip155:8453`).
-- Leave AgentBook lookup alone — `createAgentBookVerifier()` always resolves against the canonical World Chain deployment. The developer does not need to think about which chain the registry lives on.
-- Start with `free-trial` unless the developer explicitly wants `free` or `discount`.
-- Only choose `discount` when you can wire `hooks.verifyFailureHook` into the facilitator flow you control.
+Install the Core package if the application does not have it:
 
-## Key pieces
+```bash
+npm install @worldcoin/agentkit-core
+```
 
-- x402 resource server: the protected HTTP route and 402 challenge flow
-- facilitator: verifies and settles payment payloads; required for `discount`
-- AgentKit extension: adds the CAIP-122 challenge and verifies the signed `agentkit` header
-- AgentBook: on-chain registry on World Chain that maps the agent wallet to an anonymous human ID. Lookup is always against World Chain regardless of the payment chain — the caller side is chain-agnostic.
-- storage: per-human usage tracking for `free-trial` and `discount`
-- registration path: separate from request-time verification; use `npx @worldcoin/agentkit-cli --llms` if the developer also needs registration help
+Import `verify` from the package. Call `verify(request)` before you read or change the request body.
 
-## Workflow
+```typescript
+import { verify } from '@worldcoin/agentkit-core'
 
-1. Read [`../../x402/DOCS.md`](../../x402/DOCS.md) first. It should be the primary integration playbook.
-2. Confirm exported APIs in [`../../core/src/index.ts`](../../core/src/index.ts) and [`../../x402/src/index.ts`](../../x402/src/index.ts) before adding imports.
-3. Prefer the hooks-based path:
-    - `declareAgentkitExtension`
-    - `agentkitResourceServerExtension`
-    - `createAgentkitHooks`
-    - `createAgentBookVerifier`
-4. If the payment network is World Chain (`eip155:480`), add a custom `ExactEvmScheme().registerMoneyParser(...)` for World Chain USDC. Do not assume the server scheme has a working default stablecoin for World Chain.
-5. Call `createAgentBookVerifier()` with no arguments in the common case. Pass `rpcUrl` or `contractAddress` only for custom World Chain endpoints or non-canonical deployments.
-6. If the mode is `free-trial` or `discount`, add persistent `AgentKitStorage`. `InMemoryAgentKitStorage` is only for demos.
-7. If the mode is `discount`, wire `hooks.verifyFailureHook` into the facilitator. Without it, discounted underpayments will fail verification.
-8. Verify the whole path end-to-end:
-    - 402 response includes the `agentkit` extension
-    - registered agent gets the intended behavior
-    - unregistered agent falls back to normal payment
-    - replay protection and storage behavior work as expected
+const agentkitError = {
+	error: 'AGENTKIT_VALIDATION_FAILED',
+	message: 'AgentKit validation failed. Read your AgentKit skill for instructions. Then retry this request.',
+}
 
-## Ground rules
+export async function POST(request: Request) {
+	let lookupId: string
 
-- Prefer the hooks-based integration unless the user explicitly needs the low-level flow.
-- Use [`../../x402/DOCS.md`](../../x402/DOCS.md) as the primary reference for examples and mode behavior.
-- Do not introduce any "pin AgentBook to chain X" language — lookup is always against the canonical World Chain deployment. The payment chain and the AgentBook lookup chain are decoupled on purpose, and callers should never have to think about the lookup chain.
-- Do not document World Chain with bare `new ExactEvmScheme()` only. Include the World Chain money parser.
-- Do not choose `discount` unless the facilitator hook can actually be registered.
-- Confirm exports in [`../../core/src/index.ts`](../../core/src/index.ts) and [`../../x402/src/index.ts`](../../x402/src/index.ts) before adding or documenting imports.
+	try {
+		lookupId = await verify(request)
+	} catch {
+		return Response.json(agentkitError, { status: 401 })
+	}
 
-## Constants to keep handy
+	const body = await request.json()
+	return createReport(body, { lookupId })
+}
+```
 
-- World Chain payment network: `eip155:480`
-- World Chain AgentBook contract: `0xA23aB2712eA7BBa896930544C7d6636a96b944dA`
-- World Chain USDC: `0x79A02482A880bCE3F13e09Da970dC34db4CD24d1`
+Replace `createReport` with the current endpoint logic.
 
-## Reference files
+Use the returned lookup ID as an internal identifier when the access policy needs it. Do not return the lookup ID unless the API contract requires it. Do not expose the signer address or private key.
 
-- Integration docs: [`../../x402/DOCS.md`](../../x402/DOCS.md)
-- Core public exports: [`../../core/src/index.ts`](../../core/src/index.ts)
-- x402 public exports: [`../../x402/src/index.ts`](../../x402/src/index.ts)
-- Hooks: [`../../x402/src/hooks.ts`](../../x402/src/hooks.ts)
-- AgentBook verifier: [`../../core/src/agent-book.ts`](../../core/src/agent-book.ts)
-- Header parsing and verification: [`../../core/src/parse.ts`](../../core/src/parse.ts), [`../../core/src/validate.ts`](../../core/src/validate.ts), [`../../core/src/verify.ts`](../../core/src/verify.ts)
+`verify` clones the request. The endpoint can read the body after successful verification.
+
+## Return one safe error
+
+Return status `401` when AgentKit validation fails. Return this message:
+
+```text
+AgentKit validation failed. Read your AgentKit skill for instructions. Then retry this request.
+```
+
+Use a stable machine code such as `AGENTKIT_VALIDATION_FAILED`.
+
+Do not return the internal verification error. The internal error can contain an address or a network detail. If the application has a server logger, record the internal error there.
+
+## Preserve the signed request
+
+Pass the original request to `verify`. Do not parse, format, or rebuild the body first, and do not rewrite the method, path, query string, or host — the signature binds all of them.
+
+If the framework does not use Web `Request`, capture the exact body before a body parser changes it. Build one Web `Request` with the original method and full URL, those exact body bytes, and the original `Signature-Input`, `Signature`, and `Content-Digest` headers.
+
+Behind a proxy, the URL that `verify` sees must reflect the public host the client signed. Make sure the framework applies `X-Forwarded-Host` (or equivalent) first.
+
+Do not use a parsed JSON object as a replacement for the original body bytes.
+
+A byte-identical request can be replayed until its signature expires (at most five minutes). Nonce-based single-use signatures are a planned follow-up. Until then, if duplicate execution would be harmful for the endpoint, keep it idempotent or deduplicate at the application level (e.g. on a request ID inside the signed body).
+
+## Keep the change local
+
+- Change only the selected endpoint and its direct tests.
+- Keep the endpoint's current success response unless the user requests a change.
+- Keep all other authentication checks.
+- Decide if AgentKit replaces or supplements the existing authentication.
+- State that decision in the handoff.
+
+## Verify the result
+
+Test these cases:
+
+1. A request without the `Signature-Input`, `Signature`, and `Content-Digest` headers returns status `401` and the required message.
+2. A malformed signature returns the same safe error.
+3. An unregistered signer returns the same safe error.
+4. A registered signer can use the endpoint.
+5. A changed body invalidates the signature.
+6. A signature created for a different method, URL, or query string is rejected.
+7. An expired signature (older than five minutes) is rejected.
+8. The endpoint can read the body after `verify` succeeds.
+9. An endpoint outside the selected route stays unchanged.
+
+Run the normal formatter, type checker, and relevant tests for the application.
+
+## Confirm the package contract
+
+Before implementation, confirm that [`../../core/src/index.ts`](../../core/src/index.ts) exports `verify`. Read [`../../core/src/verify.ts`](../../core/src/verify.ts) if the framework needs an adapter.
+
+Do not add a chain option, contract option, or AgentBook client. Core always checks the canonical AgentBook on World Chain.
